@@ -1,0 +1,1 @@
+Groundit adds source references and confidence scores to ensure your AI outputs are verifiable and trustworthy.
