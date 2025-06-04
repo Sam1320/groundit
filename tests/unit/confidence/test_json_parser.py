@@ -2,44 +2,13 @@ import json
 from collections import defaultdict
 import pytest
 import tiktoken
-from pydantic import BaseModel, create_model
+from pydantic import BaseModel, ValidationError
+
 from groundit.confidence.logprobs_aggregators import default_sum_aggregator
 from groundit.confidence.models import TokensWithLogprob
 from groundit.confidence.json_parser import replace_leaves_with_confidence_scores
 from groundit.confidence.get_confidence_scores import map_characters_to_token_indices
-from pydantic import ValidationError
-
-
-def create_confidence_model(original_model: type[BaseModel]) -> type[BaseModel]:
-    """
-    Creates a new Pydantic model where all leaf fields (non-nested BaseModel fields) 
-    are transformed to accept float values for confidence scores.
-    
-    Args:
-        original_model: The original Pydantic model to transform
-        
-    Returns:
-        A new model class with the same structure but float types for leaf fields
-    """
-    def transform_field_type(field_info) -> tuple:
-        """Transform a field's type annotation to include float for confidence scores."""
-        field_type = field_info.annotation
-        
-        # Check if it's a BaseModel subclass (nested model) - keep as is
-        if isinstance(field_type, type) and issubclass(field_type, BaseModel):
-            return (create_confidence_model(field_type), field_info.default)
-        
-        # For leaf fields, allow float (confidence scores)
-        return (float, field_info.default)
-    
-    # Transform all fields
-    transformed_fields = {}
-    for field_name, field_info in original_model.model_fields.items():
-        transformed_fields[field_name] = transform_field_type(field_info)
-    
-    # Create new model with transformed fields
-    confidence_model_name = f"{original_model.__name__}Confidence"
-    return create_model(confidence_model_name, **transformed_fields)
+from tests.test_utils import create_confidence_model
 
 
 # Pydantic models for testing

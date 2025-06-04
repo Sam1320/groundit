@@ -31,5 +31,37 @@ dev = [
     "tiktoken>=0.9.0",
 ]
 
+# Optional dependencies for integration tests
+integration = [
+    "openai>=1.0.0",
+    "anthropic>=0.18.0",
+]
+
 [tool.pytest.ini_options]
-addopts = "-s"
+# Test discovery - organized as unit/ and integration/
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+# Use modern importlib mode (recommended for new projects)
+# This eliminates the need for sys.path manipulation
+addopts = [
+    "-v",                           # verbose output
+    "--tb=short",                   # shorter traceback format
+    "--strict-markers",             # error on unknown markers
+    "--import-mode=importlib",      # modern import mode
+]
+
+# Markers
+markers = [
+    "integration: marks tests as integration tests (requires API keys)",
+    "slow: marks tests as slow (makes network calls)",
+    "unit: marks tests as unit tests (fast, no external dependencies)",
+]
+
+# Filtering
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
