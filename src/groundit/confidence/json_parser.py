@@ -25,9 +25,9 @@ json_grammar = r"""
           | array
           | string
           | SIGNED_NUMBER -> number    #'-> number' specifies an alias for the rule
-          | "true"
-          | "false"
-          | "null"
+          | "true"        -> true
+          | "false"       -> false
+          | "null"        -> null
 
     array  : "[" [value ("," value)*] "]"
     object : "{" [pair ("," pair)*] "}"
@@ -67,6 +67,7 @@ class Extractor(Transformer_NonRecursive):
             print("tokens being aggregated", [self.tokens[i].token for i in range(token_start, token_end)])
         return [self.tokens[i].logprob for i in range(token_start, token_end)]
 
+
     def _compute_aggregated_value(self, start_pos: int, end_pos: int) -> float:
         """Compute aggregated value using the configured aggregation function."""
         logprobs = self._extract_token_logprobs(start_pos, end_pos)
@@ -76,7 +77,10 @@ class Extractor(Transformer_NonRecursive):
         return self._compute_aggregated_value(meta.start_pos, meta.end_pos)
 
     def string(self, meta: Meta, children: list[Token]) -> float:
-        return self._compute_aggregated_value(meta.start_pos, meta.end_pos)
+        # Adjust positions to exclude opening and closing quotes
+        content_start = meta.start_pos + 1  # Skip opening quote
+        content_end = meta.end_pos - 1      # Skip closing quote
+        return self._compute_aggregated_value(content_start, content_end)
 
     def true(self, meta: Meta, children: list[Token]) -> float:
         return self._compute_aggregated_value(meta.start_pos, meta.end_pos)
@@ -114,7 +118,8 @@ def replace_leaves_with_confidence_scores(
     json_string: str, 
     tokens: list[TokensWithLogprob], 
     token_indices: list[int], 
-    aggregator: AggregationFunction = default_sum_aggregator
+    aggregator: AggregationFunction = default_sum_aggregator,
+    debug: bool = False,
 ) -> PyTree:
     """
     Extracts JSON data from a JSON string using a Lark parser.
@@ -132,5 +137,7 @@ def replace_leaves_with_confidence_scores(
 
     json_parser = Lark(json_grammar, parser="lalr", propagate_positions=True, maybe_placeholders=False)
     tree = json_parser.parse(json_string)
-    extractor = Extractor(tokens, token_indices, aggregator)
+    if debug:
+        print(tree.pretty())
+    extractor = Extractor(tokens, token_indices, aggregator, debug)
     return extractor.transform(tree)

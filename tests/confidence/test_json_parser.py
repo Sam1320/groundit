@@ -1,4 +1,5 @@
 import json
+from collections import defaultdict
 import pytest
 import tiktoken
 from pydantic import BaseModel
@@ -18,11 +19,13 @@ class FlatModel(BaseModel):
 
 class Preferences(BaseModel):
     theme: str | float
-
+    notifications: bool | float
+    marketing_emails: bool | float
 
 class Profile(BaseModel):
     name: str | float
     preferences: Preferences
+    bio: str | None
 
 
 class Stats(BaseModel):
@@ -58,8 +61,11 @@ TEST_OBJECTS = [
             profile=Profile(
                 name="Alice",
                 preferences=Preferences(
-                    theme="dark"
-                )
+                    theme="dark",
+                    notifications=True,
+                    marketing_emails=False
+                ),
+                bio=None
             ),
             stats=Stats(
                 posts=42,
@@ -151,6 +157,49 @@ def test_replace_leaves_with_confidence_scores_nested(nested_json):
 
     NestedModel.model_validate(input_json)
     NestedModel.model_validate(output_json)
+
+
+def test_aggregator_with_manual_logprobs():
+    """Test that the aggregator correctly sums logprobs for a multi-token string."""
     
-    # Optional: Print the output for debugging
-    pprint(output_json, expand_all=True)
+    # Create the JSON string we want to test
+    json_string = '{ "name" : "multitokenstring"}'
+    
+    # Create tokens manually - break down "multitokenstring" into parts with specific logprobs
+    logprob_dict = defaultdict(lambda: -0.1, {'multi': -1.0, 'token': -2.0, 'string': -3.0})
+
+    manual_tokens = [
+        TokensWithLogprob(token='{ "', bytes=[], logprob=logprob_dict['{ "'], top_logprobs=None),
+        TokensWithLogprob(token='name', bytes=[], logprob=logprob_dict['name'], top_logprobs=None),
+        TokensWithLogprob(token='" : "', bytes=[], logprob=logprob_dict['" : "'], top_logprobs=None),
+        TokensWithLogprob(token='multi', bytes=[], logprob=logprob_dict['multi'], top_logprobs=None),  # Part 1 of "multitokenstring"
+        TokensWithLogprob(token='token', bytes=[], logprob=logprob_dict['token'], top_logprobs=None),  # Part 2 of "multitokenstring"  
+        TokensWithLogprob(token='string', bytes=[], logprob=logprob_dict['string'], top_logprobs=None), # Part 3 of "multitokenstring"
+        TokensWithLogprob(token='"}', bytes=[], logprob=logprob_dict['"}'], top_logprobs=None),
+    ]
+    
+    # Verify our tokens reconstruct the original string
+    reconstructed = "".join([token.token for token in manual_tokens])
+    assert reconstructed == json_string, f"Expected: {json_string}, Got: {reconstructed}"
+    
+    # Apply the confidence score replacement
+    output_json = replace_leaves_with_confidence_scores(
+        json_string=json_string,
+        tokens=manual_tokens,
+        token_indices=map_characters_to_token_indices(manual_tokens),
+        aggregator=default_sum_aggregator,
+        debug=True
+    )
+    
+    expected_confidence = default_sum_aggregator([logprob_dict["multi"], logprob_dict["token"], logprob_dict["string"]])
+    confidence_score = output_json["name"]
+    
+    assert confidence_score == expected_confidence, (
+        f"Confidence aggregation bug detected!\n"
+        f"JSON: {json_string}\n"
+        f"Tokens: {[(t.token, t.logprob) for t in manual_tokens]}\n"
+        f"Expected confidence (content only): {expected_confidence}\n"
+        f"Actual confidence (includes quotes): {confidence_score}\n"
+        f"Output JSON: {output_json}"
+    )
+
