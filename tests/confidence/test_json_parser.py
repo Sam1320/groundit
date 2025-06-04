@@ -2,35 +2,67 @@ import json
 from collections import defaultdict
 import pytest
 import tiktoken
-from pydantic import BaseModel
+from pydantic import BaseModel, create_model
 from groundit.confidence.logprobs_aggregators import default_sum_aggregator
 from groundit.confidence.models import TokensWithLogprob
 from groundit.confidence.json_parser import replace_leaves_with_confidence_scores
 from groundit.confidence.get_confidence_scores import map_characters_to_token_indices
-from rich.pretty import pprint
+from pydantic import ValidationError
+
+
+def create_confidence_model(original_model: type[BaseModel]) -> type[BaseModel]:
+    """
+    Creates a new Pydantic model where all leaf fields (non-nested BaseModel fields) 
+    are transformed to accept float values for confidence scores.
+    
+    Args:
+        original_model: The original Pydantic model to transform
+        
+    Returns:
+        A new model class with the same structure but float types for leaf fields
+    """
+    def transform_field_type(field_info) -> tuple:
+        """Transform a field's type annotation to include float for confidence scores."""
+        field_type = field_info.annotation
+        
+        # Check if it's a BaseModel subclass (nested model) - keep as is
+        if isinstance(field_type, type) and issubclass(field_type, BaseModel):
+            return (create_confidence_model(field_type), field_info.default)
+        
+        # For leaf fields, allow float (confidence scores)
+        return (float, field_info.default)
+    
+    # Transform all fields
+    transformed_fields = {}
+    for field_name, field_info in original_model.model_fields.items():
+        transformed_fields[field_name] = transform_field_type(field_info)
+    
+    # Create new model with transformed fields
+    confidence_model_name = f"{original_model.__name__}Confidence"
+    return create_model(confidence_model_name, **transformed_fields)
 
 
 # Pydantic models for testing
 class FlatModel(BaseModel):
-    name: str | float
-    age: str | float
-    city: str | float
+    name: str
+    age: int  
+    city: str
 
 
 class Preferences(BaseModel):
-    theme: str | float
-    notifications: bool | float
-    marketing_emails: bool | float
+    theme: str
+    notifications: bool
+    marketing_emails: bool
 
 class Profile(BaseModel):
-    name: str | float
+    name: str
     preferences: Preferences
     bio: str | None
 
 
 class Stats(BaseModel):
-    posts: int | str | float
-    followers: int | str | float
+    posts: int
+    followers: int
 
 
 class User(BaseModel):
@@ -39,8 +71,8 @@ class User(BaseModel):
 
 
 class Metadata(BaseModel):
-    created: str | float
-    version: str | float
+    created: str
+    version: str
 
 
 class NestedModel(BaseModel):
@@ -142,8 +174,12 @@ def test_replace_leaves_with_confidence_scores_flat(flat_json):
         aggregator=default_sum_aggregator
     )
 
+    # Validate structure matches original model
     FlatModel.model_validate(input_json)
-    FlatModel.model_validate(output_json)
+    
+    # Create confidence model and validate confidence output  
+    FlatModelConfidence = create_confidence_model(FlatModel)
+    FlatModelConfidence.model_validate(output_json)
 
 
 def test_replace_leaves_with_confidence_scores_nested(nested_json):
@@ -155,8 +191,12 @@ def test_replace_leaves_with_confidence_scores_nested(nested_json):
         aggregator=default_sum_aggregator
     )
 
+    # Validate structure matches original model
     NestedModel.model_validate(input_json)
-    NestedModel.model_validate(output_json)
+    
+    # Create confidence model and validate confidence output
+    NestedModelConfidence = create_confidence_model(NestedModel)
+    NestedModelConfidence.model_validate(output_json)
 
 
 def test_aggregator_with_manual_logprobs():
@@ -202,4 +242,31 @@ def test_aggregator_with_manual_logprobs():
         f"Actual confidence (includes quotes): {confidence_score}\n"
         f"Output JSON: {output_json}"
     )
+
+
+def test_confidence_model_validation():
+    """Test that confidence models provide stricter validation than manually modified models."""
+    
+    # Create sample confidence output that incorrectly has None (simulating old bug)
+    invalid_confidence_output = {
+        'name': -1.5,
+        'age': None,  # This should fail validation
+        'city': -0.8
+    }
+    
+    # Original model would need manual | float additions and might accept None
+    class ManuallyModifiedModel(BaseModel):
+        name: str | float
+        age: int | float | None  # This allows None which we don't want for confidence scores
+        city: str | float
+    
+    # Our auto-generated confidence model is stricter
+    FlatModelConfidence = create_confidence_model(FlatModel)
+    
+    # Manually modified model incorrectly accepts None
+    ManuallyModifiedModel.model_validate(invalid_confidence_output)  # This passes (bad!)
+    
+    # Auto-generated confidence model correctly rejects None
+    with pytest.raises(ValidationError):
+        FlatModelConfidence.model_validate(invalid_confidence_output)  # This fails (good!)
 
