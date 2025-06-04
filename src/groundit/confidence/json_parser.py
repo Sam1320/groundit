@@ -88,8 +88,8 @@ class Extractor(Transformer_NonRecursive):
     def false(self, meta: Meta, children: list[Token]) -> float:
         return self._compute_aggregated_value(meta.start_pos, meta.end_pos)
 
-    def null(self, meta: Meta, children: list[Token]) -> None:
-        return None
+    def null(self, meta: Meta, children: list[Token]) -> float:
+        return self._compute_aggregated_value(meta.start_pos, meta.end_pos)
 
     def array(self, meta: Meta, children: list[Any]) -> list[float]:
         return children
