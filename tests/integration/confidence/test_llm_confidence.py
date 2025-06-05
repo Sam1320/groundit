@@ -10,8 +10,7 @@ import pytest
 from pydantic import BaseModel
 from typing import Literal
 
-from groundit.confidence.json_parser import replace_leaves_with_confidence_scores
-from groundit.confidence.get_confidence_scores import map_characters_to_token_indices
+from groundit.confidence.confidence_extractor import get_confidence_scores
 from groundit.confidence.logprobs_aggregators import average_probability_aggregator
 from tests.test_utils import create_confidence_model
 
@@ -103,10 +102,8 @@ class TestLLMConfidenceIntegration:
         tokens = response.choices[0].logprobs.content
         content = response.choices[0].message.content
         
-        confidence_scores = replace_leaves_with_confidence_scores(
-            json_string=content,
-            tokens=tokens,
-            token_indices=map_characters_to_token_indices(tokens),
+        confidence_scores = get_confidence_scores(
+            json_string_tokens=tokens,
             aggregator=average_probability_aggregator  # Use probability space for intuitive scores
         )
         
@@ -173,10 +170,8 @@ class TestLLMConfidenceIntegration:
         tokens = response.choices[0].logprobs.content
         content = response.choices[0].message.content
         
-        confidence_scores = replace_leaves_with_confidence_scores(
-            json_string=content,
-            tokens=tokens,
-            token_indices=map_characters_to_token_indices(tokens),
+        confidence_scores = get_confidence_scores(
+            json_string_tokens=tokens,
             aggregator=average_probability_aggregator
         )
         

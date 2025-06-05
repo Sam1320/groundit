@@ -1,20 +1,13 @@
 from typing import Any, TypeAlias
+import json
 from rich import print
 
 from lark import Lark, Token, Transformer_NonRecursive, Tree, v_args
 from lark.tree import Meta
-from pydantic import BaseModel
 from groundit.confidence.models import TokensWithLogprob
 from groundit.confidence.logprobs_aggregators import AggregationFunction, default_sum_aggregator
 
 PyTree: TypeAlias = Any  # a tree-like structure built out of container-like Python objects.
-
-
-class HasProb(BaseModel):
-    value: Any
-    start: int
-    end: int
-    logprob: float
 
 
 # Define a grammar for JSON
@@ -41,6 +34,35 @@ json_grammar = r"""
     %import common.WS
     %ignore WS
 """
+
+
+def _map_characters_to_token_indices(extracted_data_token: list[TokensWithLogprob]) -> list[int]:
+    """
+    Maps each character in the JSON string output to its corresponding token index.
+
+    Args:
+    extracted_data_token : A list of `TokenLogprob` objects, where each object represents a token and its associated data.
+
+    Returns:
+    A list of integers where each position corresponds to a character in the concatenated JSON string,
+    and the integer at each position is the index of the token responsible for generating that specific character.
+    Example:
+        >>> tokens = [ChatCompletionTokenLogprob(token='{'),
+                      ChatCompletionTokenLogprob(token='"key1"'),
+                      ChatCompletionTokenLogprob(token=': '),
+                      ChatCompletionTokenLogprob(token='"value1"'),
+                      ChatCompletionTokenLogprob(token='}')]
+        >>> _map_characters_to_token_indices(tokens)
+        [0, 1, 1, 1, 1, 1, 1, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 4]
+    """
+
+    token_indices = []
+
+    for token_idx, token_data in enumerate(extracted_data_token):
+        token_text = token_data.token
+        token_indices.extend([token_idx] * len(token_text))
+
+    return token_indices
 
 
 # Transformer that processes the tree and substitutes each atomic value with the cumulative log-probability of its tokens
@@ -114,7 +136,7 @@ class Extractor(Transformer_NonRecursive):
         return children[0]
 
 
-def replace_leaves_with_confidence_scores(
+def _replace_leaves_with_confidence_scores(
     json_string: str, 
     tokens: list[TokensWithLogprob], 
     token_indices: list[int], 
@@ -141,3 +163,43 @@ def replace_leaves_with_confidence_scores(
         print(tree.pretty())
     extractor = Extractor(tokens, token_indices, aggregator, debug)
     return extractor.transform(tree)
+
+def _validate_json_string_tokens(json_string_tokens: list[TokensWithLogprob]) -> bool:
+    """
+    Validates if the given JSON string is valid.
+    """
+    json_string = "".join([logprob.token for logprob in json_string_tokens])
+    try:
+        json.loads(json_string)
+    except json.JSONDecodeError:
+        raise ValueError("The token list does not represent a valid JSON string")
+    return json_string
+    
+def get_confidence_scores(
+    json_string_tokens: list[TokensWithLogprob],
+    aggregator: AggregationFunction = default_sum_aggregator,
+    debug: bool = False
+) -> dict[str, Any]:
+    """
+    Takes a list of tokens representing a JSON string and returns the same JSON string with the leaves replaced with confidence scores.
+    
+    Args:
+        json_string_tokens: A list of TokensWithLogprob objects representing a JSON string
+        aggregator: The function to use for aggregating log probabilities
+        debug: Whether to print debug information
+        
+    Returns:
+        The parsed JSON data with leaves replaced by confidence scores
+    """
+
+    json_string = _validate_json_string_tokens(json_string_tokens)
+
+    token_indices = _map_characters_to_token_indices(json_string_tokens)
+
+    return _replace_leaves_with_confidence_scores(
+        json_string=json_string,
+        tokens=json_string_tokens,
+        token_indices=token_indices,
+        aggregator=aggregator,
+        debug=debug
+    )

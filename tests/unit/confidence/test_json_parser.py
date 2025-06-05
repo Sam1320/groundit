@@ -6,8 +6,7 @@ from pydantic import BaseModel, ValidationError
 
 from groundit.confidence.logprobs_aggregators import default_sum_aggregator
 from groundit.confidence.models import TokensWithLogprob
-from groundit.confidence.json_parser import replace_leaves_with_confidence_scores
-from groundit.confidence.get_confidence_scores import map_characters_to_token_indices
+from groundit.confidence.confidence_extractor import get_confidence_scores
 from tests.test_utils import create_confidence_model
 
 
@@ -97,10 +96,8 @@ def test_create_tokens_from_string():
 
 def test_replace_leaves_with_confidence_scores_nested(nested_json):
     input_json = json.loads(nested_json)
-    output_json = replace_leaves_with_confidence_scores(
-        json_string=nested_json,
-        tokens=string_to_tokens(nested_json),
-        token_indices=map_characters_to_token_indices(string_to_tokens(nested_json)),
+    output_json = get_confidence_scores(
+        json_string_tokens=string_to_tokens(nested_json),
         aggregator=default_sum_aggregator
     )
 
@@ -132,10 +129,8 @@ def test_aggregator_with_manual_logprobs():
     reconstructed = "".join([token.token for token in manual_tokens])
     assert reconstructed == json_string
     
-    output_json = replace_leaves_with_confidence_scores(
-        json_string=json_string,
-        tokens=manual_tokens,
-        token_indices=map_characters_to_token_indices(manual_tokens),
+    output_json = get_confidence_scores(
+        json_string_tokens=manual_tokens,
         aggregator=default_sum_aggregator
     )
     
