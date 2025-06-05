@@ -15,7 +15,7 @@ def average_probability_aggregator(logprobs: list[float]) -> float:
     if not logprobs:
         return 0.0
     probabilities = [math.exp(logprob) for logprob in logprobs]
-    return sum(probabilities) / len(probabilities)
+    return round(sum(probabilities) / len(probabilities), 3)
 
 
 def joint_probability_aggregator(logprobs: list[float]) -> float:
