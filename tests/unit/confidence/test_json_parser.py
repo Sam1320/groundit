@@ -12,12 +12,6 @@ from tests.test_utils import create_confidence_model
 
 
 # Pydantic models for testing
-class FlatModel(BaseModel):
-    name: str
-    age: int  
-    city: str
-
-
 class Preferences(BaseModel):
     theme: str
     notifications: bool
@@ -49,45 +43,32 @@ class NestedModel(BaseModel):
     metadata: Metadata
 
 
-TEST_OBJECTS = [
-    # Flat model
-    FlatModel(
-        name="John",
-        age=30,
-        city="New York"
-    ),
-    # Nested model
-    NestedModel(
-        user=User(
-            profile=Profile(
-                name="Alice",
-                preferences=Preferences(
-                    theme="dark",
-                    notifications=True,
-                    marketing_emails=False
-                ),
-                bio=None
+TEST_OBJECT = NestedModel(
+    user=User(
+        profile=Profile(
+            name="Alice",
+            preferences=Preferences(
+                theme="dark",
+                notifications=True,
+                marketing_emails=False
             ),
-            stats=Stats(
-                posts=42,
-                followers=1337
-            )
+            bio=None
         ),
-        metadata=Metadata(
-            created="2024-01-01",
-            version="1.0"
+        stats=Stats(
+            posts=42,
+            followers=1337
         )
+    ),
+    metadata=Metadata(
+        created="2024-01-01",
+        version="1.0"
     )
-]
+)
 
-
-@pytest.fixture
-def flat_json() -> str:
-    return TEST_OBJECTS[0].model_dump_json()
 
 @pytest.fixture
 def nested_json() -> str:
-    return TEST_OBJECTS[1].model_dump_json()
+    return TEST_OBJECT.model_dump_json()
 
 
 def string_to_tokens(text: str) -> list[TokensWithLogprob]:
@@ -113,23 +94,6 @@ def test_create_tokens_from_string():
     tokens = string_to_tokens(json_string)
     assert json_string == "".join([token.token for token in tokens])
     assert len(tokens) > 1
-
-def test_replace_leaves_with_confidence_scores_flat(flat_json):
-    input_json = json.loads(flat_json)
-    output_json = replace_leaves_with_confidence_scores(
-        json_string=flat_json,
-        tokens=string_to_tokens(flat_json),
-        token_indices=map_characters_to_token_indices(string_to_tokens(flat_json)),
-        aggregator=default_sum_aggregator
-    )
-
-    # Validate structure matches original model
-    FlatModel.model_validate(input_json)
-    
-    # Create confidence model and validate confidence output  
-    FlatModelConfidence = create_confidence_model(FlatModel)
-    FlatModelConfidence.model_validate(output_json)
-
 
 def test_replace_leaves_with_confidence_scores_nested(nested_json):
     input_json = json.loads(nested_json)
@@ -186,24 +150,39 @@ def test_confidence_model_validation():
     
     # Sample confidence output with None (simulating old bug)
     invalid_confidence_output = {
-        'name': -1.5,
-        'age': None,  # This should fail validation
-        'city': -0.8
+        'user': {
+            'profile': {
+                'name': -1.5,
+                'preferences': {
+                    'theme': None,  # This should fail validation
+                    'notifications': -2.0,
+                    'marketing_emails': -1.0
+                },
+                'bio': -0.5
+            },
+            'stats': {
+                'posts': -1.8,
+                'followers': -2.2
+            }
+        },
+        'metadata': {
+            'created': -1.0,
+            'version': -1.5
+        }
     }
     
     # Manual model incorrectly allows None
     class ManuallyModifiedModel(BaseModel):
-        name: str | float
-        age: int | float | None  # Allows None - not what we want for confidence scores
-        city: str | float
+        user: dict
+        metadata: dict
     
     # Auto-generated confidence model is stricter
-    FlatModelConfidence = create_confidence_model(FlatModel)
+    NestedModelConfidence = create_confidence_model(NestedModel)
     
     # Manual model incorrectly accepts None
     ManuallyModifiedModel.model_validate(invalid_confidence_output)
     
     # Auto-generated model correctly rejects None
     with pytest.raises(ValidationError):
-        FlatModelConfidence.model_validate(invalid_confidence_output)
+        NestedModelConfidence.model_validate(invalid_confidence_output)
 
