@@ -1,69 +1,58 @@
 from typing import Type, Union
-from pydantic import BaseModel, create_model
+from pydantic import BaseModel, create_model, Field
 from groundit.reference.models import FieldWithSource
 
-def create_source_model(model: BaseModel) -> Type[BaseModel]:
+
+def create_source_model(model: Type[BaseModel]) -> Type[BaseModel]:
     """
-    Create a ModelWithSource from a given model.
-    Convert every leaf field to a FieldWithSource field.
-    
+    Create a model with source tracking from a given Pydantic model.
+    This function transforms the model to include source tracking while preserving
+    field descriptions.
+    - Leaf fields are converted to `FieldWithSource`.
+    - Nested Pydantic models are recursively transformed.
+    - Field descriptions from the original model are preserved in the new model.
     Args:
-        model: The original Pydantic model to transform
-        
+        model: The original Pydantic model to transform.
     Returns:
-        A new model class with the same structure but FieldWithSource types for leaf fields
+        A new model class with source tracking capabilities.
     """
-    def transform_field_type(field_info) -> tuple:
-        """Transform a field's type annotation to use FieldWithSource for leaf fields."""
-        field_type = field_info.annotation
-        
-        # Handle Union types (like str | None)
-        if hasattr(field_type, '__origin__') and field_type.__origin__ is Union:
-            # For union types, check if any are BaseModel subclasses
-            union_args = field_type.__args__
-            has_basemodel = any(
-                isinstance(arg, type) and issubclass(arg, BaseModel) 
-                for arg in union_args if arg is not type(None)
-            )
-            if has_basemodel:
-                # Transform the BaseModel part
-                non_none_args = [arg for arg in union_args if arg is not type(None)]
-                if len(non_none_args) == 1 and isinstance(non_none_args[0], type) and issubclass(non_none_args[0], BaseModel):
-                    transformed_model = create_source_model(non_none_args[0])
-                    if type(None) in union_args:
-                        return (Union[transformed_model, type(None)], field_info.default)
-                    else:
-                        return (transformed_model, field_info.default)
-            
-            # For other union types (like str | None), treat as leaf
-            return (FieldWithSource, field_info.default)
-        
-        # Handle list types
-        if hasattr(field_type, '__origin__') and field_type.__origin__ is list:
-            list_args = field_type.__args__
-            if len(list_args) == 1:
-                inner_type = list_args[0]
-                if isinstance(inner_type, type) and issubclass(inner_type, BaseModel):
-                    # List of BaseModels - transform the inner type
-                    transformed_inner = create_source_model(inner_type)
-                    return (list[transformed_inner], field_info.default)
-                else:
-                    # List of leaf types - keep as list but content becomes FieldWithSource
-                    return (list[FieldWithSource], field_info.default)
-        
-        # Check if it's a BaseModel subclass (nested model) - recursively transform
-        if isinstance(field_type, type) and issubclass(field_type, BaseModel):
-            return (create_source_model(field_type), field_info.default)
-        
-        # For leaf fields, use FieldWithSource
-        return (FieldWithSource, field_info.default)
     
-    # Transform all fields
+    def transform_type(original_type: Type) -> Type:
+        """Recursively transforms the type annotation."""
+        if hasattr(original_type, '__origin__'):
+            if original_type.__origin__ is Union:
+                # Handle Union types, e.g., str | None
+                new_args = tuple(transform_type(arg) for arg in original_type.__args__)
+                return Union[new_args]
+            
+            if original_type.__origin__ is list:
+                # Handle list types, e.g., list[HumanName]
+                inner_type = original_type.__args__[0]
+                transformed_inner = transform_type(inner_type)
+                return list[transformed_inner]
+
+        # Handle nested Pydantic models
+        if isinstance(original_type, type) and issubclass(original_type, BaseModel):
+            return create_source_model(original_type)
+
+        # Handle NoneType for optional fields
+        if original_type is type(None):
+            return type(None)
+
+        # Base case: for leaf fields, use FieldWithSource
+        return FieldWithSource
+
     transformed_fields = {}
     for field_name, field_info in model.model_fields.items():
-        transformed_fields[field_name] = transform_field_type(field_info)
-    
-    # Create new model with transformed fields
+        new_type = transform_type(field_info.annotation)
+        
+        # Create a new Field, preserving the original description and default value
+        new_field = Field(
+            description=field_info.description,
+            default=field_info.default if not field_info.is_required() else ...
+        )
+        transformed_fields[field_name] = (new_type, new_field)
+
     source_model_name = f"{model.__name__}WithSource"
-    return create_model(source_model_name, **transformed_fields)
+    return create_model(source_model_name, **transformed_fields, __base__=BaseModel)
 

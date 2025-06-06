@@ -7,4 +7,7 @@ class FieldWithSource(BaseModel):
     A field with a source.
     """
     value: Any = Field(description="The value of the field.")
-    source_quote: str = Field(description="The exact sentence or phrase from the source text from which the value was extracted.")
+    source_quote: str | None = Field(
+        default=None,
+        description="The exact sentence or phrase from the source text from which the value was extracted."
+    )
