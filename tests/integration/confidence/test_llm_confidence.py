@@ -12,7 +12,7 @@ from typing import Literal
 
 from groundit.confidence.confidence_extractor import get_confidence_scores
 from groundit.confidence.logprobs_aggregators import average_probability_aggregator
-from tests.test_utils import create_confidence_model
+from tests.utils import create_confidence_model
 
 class DiceRoll(BaseModel):
     """Result of a single dice roll with explicit confidence."""

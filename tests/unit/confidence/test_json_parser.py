@@ -7,62 +7,8 @@ from pydantic import BaseModel, ValidationError
 from groundit.confidence.logprobs_aggregators import default_sum_aggregator
 from groundit.confidence.models import TokensWithLogprob
 from groundit.confidence.confidence_extractor import get_confidence_scores
-from tests.test_utils import create_confidence_model
-
-
-# Pydantic models for testing
-class Preferences(BaseModel):
-    theme: str
-    notifications: bool
-    marketing_emails: bool
-
-class Profile(BaseModel):
-    name: str
-    preferences: Preferences
-    bio: str | None
-
-
-class Stats(BaseModel):
-    posts: int
-    followers: int
-
-
-class User(BaseModel):
-    profile: Profile
-    stats: Stats
-
-
-class Metadata(BaseModel):
-    created: str
-    version: str
-
-
-class NestedModel(BaseModel):
-    user: User
-    metadata: Metadata
-
-
-TEST_OBJECT = NestedModel(
-    user=User(
-        profile=Profile(
-            name="Alice",
-            preferences=Preferences(
-                theme="dark",
-                notifications=True,
-                marketing_emails=False
-            ),
-            bio=None
-        ),
-        stats=Stats(
-            posts=42,
-            followers=1337
-        )
-    ),
-    metadata=Metadata(
-        created="2024-01-01",
-        version="1.0"
-    )
-)
+from tests.utils import create_confidence_model
+from tests.models import (NestedModel, TEST_OBJECT)
 
 
 @pytest.fixture
