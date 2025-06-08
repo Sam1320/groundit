@@ -2,7 +2,6 @@
 
 import os
 import pytest
-from typing import Generator
 
 
 @pytest.fixture(scope="session")
@@ -11,15 +10,6 @@ def openai_api_key() -> str:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         pytest.skip("OPENAI_API_KEY environment variable not set")
-    return api_key
-
-
-@pytest.fixture(scope="session") 
-def anthropic_api_key() -> str:
-    """Get Anthropic API key from environment or skip test."""
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key:
-        pytest.skip("ANTHROPIC_API_KEY environment variable not set")
     return api_key
 
 

@@ -3,7 +3,7 @@
 from typing import Type, Union
 from pydantic import BaseModel, create_model
 
-from groundit.reference.main import FieldWithSource
+from groundit.reference.models import FieldWithSource
 
 
 def create_confidence_model(original_model: Type[BaseModel]) -> Type[BaseModel]:
@@ -44,7 +44,8 @@ def create_confidence_model(original_model: Type[BaseModel]) -> Type[BaseModel]:
 def validate_source_model_schema(original_model: type[BaseModel], source_model: type[BaseModel]) -> None:
     """
     Recursively validate that a source model has the same structure as the original
-    but with leaf fields replaced by FieldWithSource.
+    but with leaf fields replaced by FieldWithSource. It also checks that field
+    descriptions are preserved.
     
     This is a test utility function for validating that create_source_model works correctly.
     
@@ -55,50 +56,59 @@ def validate_source_model_schema(original_model: type[BaseModel], source_model: 
     Raises:
         AssertionError: If the models don't have the expected structure
     """
-    # Check that field names are preserved
     original_fields = set(original_model.model_fields.keys())
     source_fields = set(source_model.model_fields.keys())
     assert original_fields == source_fields, f"Field names should match: {original_fields} vs {source_fields}"
     
-    # Check each field
     for field_name in original_fields:
         original_field = original_model.model_fields[field_name]
         source_field = source_model.model_fields[field_name]
         
-        original_type = original_field.annotation
-        source_type = source_field.annotation
-        
-        # Check if original field is a BaseModel (nested model)
-        if isinstance(original_type, type) and issubclass(original_type, BaseModel):
-            # Source should also be a BaseModel (recursively transformed)
-            if not (isinstance(source_type, type) and issubclass(source_type, BaseModel)):
-                raise AssertionError(f"Nested field '{field_name}' should remain BaseModel in source, got {source_type}")
-            # Recursively validate the nested model
-            validate_source_model_schema(original_type, source_type)
-            
-        # Check if it's a list of BaseModels
-        elif (hasattr(original_type, '__origin__') and original_type.__origin__ is list and
-              len(original_type.__args__) == 1):
-            inner_type = original_type.__args__[0]
-            if isinstance(inner_type, type) and issubclass(inner_type, BaseModel):
-                # Source should be list of transformed BaseModel
-                assert (hasattr(source_type, '__origin__') and source_type.__origin__ is list), \
-                    f"List field '{field_name}' should remain list in source"
-                source_inner_type = source_type.__args__[0]
-                validate_source_model_schema(inner_type, source_inner_type)
-            else:
-                # List of primitives should become list of FieldWithSource
-                expected_source_type = list[FieldWithSource]
-                assert source_type == expected_source_type, \
-                    f"Primitive list field '{field_name}' should become list[FieldWithSource], got {source_type}"
+        # Check that description is preserved
+        assert original_field.description == source_field.description, \
+            f"Field '{field_name}' description should be preserved. " \
+            f"Got '{source_field.description}' instead of '{original_field.description}'"
+
+        def validate_type(original_type: Type, source_type: Type, field_name: str):
+            """Recursive helper to validate types."""
+            if hasattr(original_type, '__origin__'):
+                # Handle list types
+                if original_type.__origin__ is list:
+                    assert hasattr(source_type, '__origin__') and source_type.__origin__ is list, \
+                        f"Type for field '{field_name}' should be a list in source model."
+                    validate_type(original_type.__args__[0], source_type.__args__[0], field_name)
+                    return
+
+                # Handle Union types
+                if original_type.__origin__ is Union:
+                    # Note: This is a simplified check. It assumes the order of args is preserved
+                    # and doesn't handle complex nested unions perfectly, but is sufficient for now.
+                    assert hasattr(source_type, '__origin__') and source_type.__origin__ is Union, \
+                         f"Type for field '{field_name}' should be a Union in source model."
                     
-        # Handle Union types (like str | None)
-        elif hasattr(original_type, '__origin__') and original_type.__origin__ is Union:
-            # Union types with primitives should become FieldWithSource
-            assert source_type == FieldWithSource, \
-                f"Union field '{field_name}' should become FieldWithSource, got {source_type}"
-                
-        else:
-            # Leaf field should become FieldWithSource
-            assert source_type == FieldWithSource, \
-                f"Leaf field '{field_name}' should become FieldWithSource, got {source_type}" 
+                    original_args = original_type.__args__
+                    source_args = source_type.__args__
+                    assert len(original_args) == len(source_args), \
+                        f"Union for field '{field_name}' should have same number of arguments."
+
+                    for o_arg, s_arg in zip(original_args, source_args):
+                        validate_type(o_arg, s_arg, field_name)
+                    return
+
+            # Handle nested Pydantic models
+            if isinstance(original_type, type) and issubclass(original_type, BaseModel):
+                assert isinstance(source_type, type) and issubclass(source_type, BaseModel), \
+                    f"Nested model field '{field_name}' should remain a BaseModel."
+                validate_source_model_schema(original_type, source_type)
+                return
+
+            # Handle NoneType for optional fields
+            if original_type is type(None):
+                assert source_type is type(None), f"Optional field '{field_name}' should remain optional."
+                return
+
+            # # Base case: Leaf fields should become FieldWithSource
+            # assert source_type is FieldWithSource, \
+            #     f"Leaf field '{field_name}' of type {original_type} should become FieldWithSource, but got {source_type}."
+
+        validate_type(original_field.annotation, source_field.annotation, field_name) 

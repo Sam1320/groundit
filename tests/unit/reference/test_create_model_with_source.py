@@ -2,7 +2,8 @@
 
 from pydantic import BaseModel
 
-from groundit.reference.main import create_source_model, FieldWithSource
+from groundit.reference.create_model_with_source import create_source_model
+from groundit.reference.models import FieldWithSource
 from tests.models import Simple, Nested, WithLists
 from tests.utils import validate_source_model_schema
 
@@ -50,6 +51,9 @@ class TestCreateSourceModel:
         # Note: Field descriptions may not be directly accessible in the same way
         # but the model should still work correctly
         validate_source_model_schema(WithDescriptions, source_model)
+
+        # assert source_model.model_fields['name'].description == "The person's name"
+        # assert source_model.model_fields['age'].description == "The person's age"
     
     def test_model_validation_works(self):
         """Test that the created source model can be instantiated and validated."""
