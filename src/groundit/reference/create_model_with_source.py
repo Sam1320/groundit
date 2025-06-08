@@ -1,35 +1,43 @@
-from typing import Type, Union
+from typing import Type, Union, get_origin, get_args
+import types
 from pydantic import BaseModel, create_model, Field
 from groundit.reference.models import FieldWithSource
 
 
 def create_source_model(model: Type[BaseModel]) -> Type[BaseModel]:
     """
-    Create a model with source tracking from a given Pydantic model.
-    This function transforms the model to include source tracking while preserving
-    field descriptions.
-    - Leaf fields are converted to `FieldWithSource`.
+    Dynamically creates a new Pydantic model for source tracking.
+
+    This function transforms a given Pydantic model into a new one where each
+    leaf field is replaced by a `FieldWithSource` generic model. This allows for
+    tracking the original text (`source_quote`) for each extracted value while
+    preserving the original field's type and description.
+
+    - Leaf fields are converted to `FieldWithSource[OriginalType]`.
     - Nested Pydantic models are recursively transformed.
-    - Field descriptions from the original model are preserved in the new model.
+    - Lists and Unions are traversed to transform their inner types.
+    - Field descriptions from the original model are preserved.
+
     Args:
-        model: The original Pydantic model to transform.
+        model: The original Pydantic model class to transform.
+
     Returns:
-        A new model class with source tracking capabilities.
+        A new Pydantic model class with source tracking capabilities.
     """
     
-    def transform_type(original_type: Type) -> Type:
-        """Recursively transforms the type annotation."""
-        if hasattr(original_type, '__origin__'):
-            if original_type.__origin__ is Union:
-                # Handle Union types, e.g., str | None
-                new_args = tuple(transform_type(arg) for arg in original_type.__args__)
-                return Union[new_args]
+    def _transform_type(original_type: Type) -> Type:
+        """Recursively transforms a type annotation."""
+        origin = get_origin(original_type)
+
+        if origin:  # Handles generic types like list, union, etc.
+            args = get_args(original_type)
+            transformed_args = tuple(_transform_type(arg) for arg in args)
             
-            if original_type.__origin__ is list:
-                # Handle list types, e.g., list[HumanName]
-                inner_type = original_type.__args__[0]
-                transformed_inner = transform_type(inner_type)
-                return list[transformed_inner]
+            # Handle Python 3.10+ UnionType (str | None syntax) 
+            if isinstance(original_type, types.UnionType):
+                return Union[transformed_args]
+            
+            return origin[transformed_args]
 
         # Handle nested Pydantic models
         if isinstance(original_type, type) and issubclass(original_type, BaseModel):
@@ -39,12 +47,12 @@ def create_source_model(model: Type[BaseModel]) -> Type[BaseModel]:
         if original_type is type(None):
             return type(None)
 
-        # Base case: for leaf fields, use FieldWithSource
-        return FieldWithSource
+        # Base case: for leaf fields, wrap in FieldWithSource
+        return FieldWithSource[original_type]
 
     transformed_fields = {}
     for field_name, field_info in model.model_fields.items():
-        new_type = transform_type(field_info.annotation)
+        new_type = _transform_type(field_info.annotation)
         
         # Create a new Field, preserving the original description and default value
         new_field = Field(
