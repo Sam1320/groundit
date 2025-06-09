@@ -17,8 +17,8 @@ class TestPositiveCases:
             age: int
         
         class SimpleWithSource(BaseModel):
-            name: FieldWithSource
-            age: FieldWithSource
+            name: FieldWithSource[str]
+            age: FieldWithSource[int]
         
         # Should pass without raising
         validate_source_model_schema(Simple, SimpleWithSource)
@@ -34,12 +34,12 @@ class TestPositiveCases:
             active: bool
         
         class SimpleWithSource(BaseModel):
-            name: FieldWithSource
-            age: FieldWithSource
+            name: FieldWithSource[str]
+            age: FieldWithSource[int]
             
         class NestedWithSource(BaseModel):
             profile: SimpleWithSource
-            active: FieldWithSource
+            active: FieldWithSource[bool]
         
         # Should pass without raising
         validate_source_model_schema(Nested, NestedWithSource)
@@ -55,8 +55,8 @@ class TestFieldNameValidation:
             age: int
         
         class SimpleWithSource(BaseModel):
-            wrong_name: FieldWithSource  # Should be 'name'
-            age: FieldWithSource
+            wrong_name: FieldWithSource[str]  # Should be 'name'
+            age: FieldWithSource[int]
         
         with pytest.raises(AssertionError, match="Field names should match"):
             validate_source_model_schema(Simple, SimpleWithSource)
@@ -68,7 +68,7 @@ class TestFieldNameValidation:
             age: int
         
         class SimpleWithSource(BaseModel):
-            name: FieldWithSource
+            name: FieldWithSource[str]
             # Missing 'age' field
         
         with pytest.raises(AssertionError, match="Field names should match"):
@@ -81,9 +81,9 @@ class TestFieldNameValidation:
             age: int
         
         class SimpleWithSource(BaseModel):
-            name: FieldWithSource
-            age: FieldWithSource
-            extra: FieldWithSource  # Extra field not in original
+            name: FieldWithSource[str]
+            age: FieldWithSource[int]
+            extra: FieldWithSource[str]  # Extra field not in original
         
         with pytest.raises(AssertionError, match="Field names should match"):
             validate_source_model_schema(Simple, SimpleWithSource)
@@ -99,8 +99,8 @@ class TestFieldTypeValidation:
             age: int
         
         class SimpleWithSource(BaseModel):
-            name: str  # Should be FieldWithSource
-            age: FieldWithSource
+            name: str  # Should be FieldWithSource[
+            age: FieldWithSource[int]
         
         with pytest.raises(AssertionError, match="should become FieldWithSource"):
             validate_source_model_schema(Simple, SimpleWithSource)
@@ -117,11 +117,11 @@ class TestFieldTypeValidation:
         
         class SimpleWithSource(BaseModel):
             name: str  # Should be FieldWithSource
-            age: FieldWithSource
+            age: FieldWithSource[int]
         
         class NestedWithSource(BaseModel):
             profile: SimpleWithSource  # Contains invalid nested structure
-            active: FieldWithSource
+            active: FieldWithSource[bool]
         
         with pytest.raises(AssertionError, match="should become FieldWithSource"):
             validate_source_model_schema(Nested, NestedWithSource)
@@ -138,7 +138,7 @@ class TestFieldTypeValidation:
         
         class NestedWithSource(BaseModel):
             profile: FieldWithSource  # Should be transformed Simple, not FieldWithSource
-            active: FieldWithSource
+            active: FieldWithSource[bool]
         
         # FieldWithSource is technically a BaseModel, but has wrong field structure
         with pytest.raises(AssertionError, match="Field names should match"):
@@ -159,11 +159,11 @@ class TestListValidation:
             profiles: list[Simple]
         
         class SimpleWithSource(BaseModel):
-            name: FieldWithSource
-            age: FieldWithSource
+            name: FieldWithSource[str]
+            age: FieldWithSource[int]
         
         class WithListsWithSource(BaseModel):
-            tags: list[FieldWithSource]  # Primitive list becomes list[FieldWithSource]
+            tags: list[FieldWithSource[str]]  # Primitive list becomes list[FieldWithSource]
             profiles: list[SimpleWithSource]  # BaseModel list becomes list[TransformedBaseModel]
         
         # Should pass without raising
@@ -180,8 +180,8 @@ class TestListValidation:
             profiles: list[Simple]
         
         class SimpleWithSource(BaseModel):
-            name: FieldWithSource
-            age: FieldWithSource
+            name: FieldWithSource[str]
+            age: FieldWithSource[int]
         
         class WithListsWithSource(BaseModel):
             tags: list[str]  # Should be list[FieldWithSource]
@@ -189,33 +189,3 @@ class TestListValidation:
         
         with pytest.raises(AssertionError): #, match="should become list\\[FieldWithSource\\]"):
             validate_source_model_schema(WithLists, WithListsWithSource)
-
-
-class TestUnionValidation:
-    """Test cases for Union/Optional type validation."""
-    
-    def test_union_types_correctly_transformed(self):
-        """Test that Union types are correctly transformed."""
-        class WithUnion(BaseModel):
-            optional_field: str | None
-            required_field: str
-        
-        class WithUnionWithSource(BaseModel):
-            optional_field: FieldWithSource
-            required_field: FieldWithSource
-        
-        # Should pass without raising
-        validate_source_model_schema(WithUnion, WithUnionWithSource)
-    
-    def test_untransformed_union_types_rejected(self):
-        """Test that untransformed Union types are rejected."""
-        class WithUnion(BaseModel):
-            optional_field: str | None
-            required_field: str
-        
-        class WithUnionWithSource(BaseModel):
-            optional_field: str | None  # Should be FieldWithSource
-            required_field: FieldWithSource
-        
-        with pytest.raises(AssertionError, match="should become FieldWithSource"):
-            validate_source_model_schema(WithUnion, WithUnionWithSource) 

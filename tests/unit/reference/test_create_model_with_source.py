@@ -26,15 +26,6 @@ class TestCreateSourceModel:
         source_model = create_source_model(WithLists)
         validate_source_model_schema(WithLists, source_model)
     
-    def test_model_with_optional_fields(self):
-        """Test transformation of a model with optional/union fields."""
-        class WithOptional(BaseModel):
-            name: str | None
-            age: int | None
-        
-        source_model = create_source_model(WithOptional)
-        validate_source_model_schema(WithOptional, source_model)
-    
     def test_model_retains_field_descriptions(self):
         """Test that field descriptions are preserved in the transformed model."""
         from pydantic import Field

@@ -33,10 +33,6 @@ def create_source_model(model: Type[BaseModel]) -> Type[BaseModel]:
             args = get_args(original_type)
             transformed_args = tuple(_transform_type(arg) for arg in args)
             
-            # Handle Python 3.10+ UnionType (str | None syntax) 
-            if isinstance(original_type, types.UnionType):
-                return Union[transformed_args]
-            
             return origin[transformed_args]
 
         # Handle nested Pydantic models
