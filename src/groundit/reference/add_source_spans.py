@@ -26,7 +26,7 @@ def add_source_spans(extraction_result: dict, source_text: str) -> dict:
                 source_quote = data['source_quote']
                 
                 # Find the span of the source quote in the text
-                start_index = source_text.find(source_quote)
+                start_index = source_text.find(source_quote) if source_quote else -1
                 
                 if start_index == -1:
                     print(f"⚠️  Warning: Could not find source quote in text: '{source_quote}'")
