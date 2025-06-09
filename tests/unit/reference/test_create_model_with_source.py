@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel
 
-from groundit.reference.create_model_with_source import create_source_model
+from groundit.reference.create_model_with_source import create_model_with_source
 from groundit.reference.models import FieldWithSource
 from tests.models import Simple, Nested, WithLists
 from tests.utils import validate_source_model_schema
@@ -13,17 +13,17 @@ class TestCreateSourceModel:
     
     def test_simple_model_transformation(self):
         """Test transformation of a simple model with basic types."""
-        source_model = create_source_model(Simple)
+        source_model = create_model_with_source(Simple)
         validate_source_model_schema(Simple, source_model)
     
     def test_nested_model_transformation(self):
         """Test transformation of a model with nested BaseModel fields."""
-        source_model = create_source_model(Nested)
+        source_model = create_model_with_source(Nested)
         validate_source_model_schema(Nested, source_model)
     
     def test_model_with_lists_transformation(self):
         """Test transformation of a model with list fields."""
-        source_model = create_source_model(WithLists)
+        source_model = create_model_with_source(WithLists)
         validate_source_model_schema(WithLists, source_model)
     
     def test_model_retains_field_descriptions(self):
@@ -34,7 +34,7 @@ class TestCreateSourceModel:
             name: str = Field(description="The person's name")
             age: int = Field(description="The person's age")
         
-        source_model = create_source_model(WithDescriptions)
+        source_model = create_model_with_source(WithDescriptions)
         
         # Check that descriptions are preserved
         assert 'name' in source_model.model_fields
@@ -48,7 +48,7 @@ class TestCreateSourceModel:
     
     def test_model_validation_works(self):
         """Test that the created source model can be instantiated and validated."""
-        source_model = create_source_model(Simple)
+        source_model = create_model_with_source(Simple)
         
         # Create a test instance
         test_data = {

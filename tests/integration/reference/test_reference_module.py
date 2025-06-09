@@ -1,7 +1,7 @@
 import json
 import pytest
 from groundit.reference.add_source_spans import add_source_spans
-from groundit.reference.create_model_with_source import create_source_model
+from groundit.reference.create_model_with_source import create_model_with_source
 from pydantic import BaseModel, Field
 from datetime import date
 
@@ -127,7 +127,7 @@ class TestReferenceModule:
         is correctly enriched with valid source spans.
         """
         # 1. Create a "source-aware" version of the Pydantic model
-        response_model_with_source = create_source_model(Patient)
+        response_model_with_source = create_model_with_source(Patient)
 
         # 2. Use the transformed model to extract data from the document
         response = openai_client.beta.chat.completions.parse(

@@ -1,10 +1,9 @@
-from typing import Type, Union, get_origin, get_args
-import types
+from typing import Type, get_origin, get_args
 from pydantic import BaseModel, create_model, Field
 from groundit.reference.models import FieldWithSource
 
 
-def create_source_model(model: Type[BaseModel]) -> Type[BaseModel]:
+def create_model_with_source(model: Type[BaseModel]) -> Type[BaseModel]:
     """
     Dynamically creates a new Pydantic model for source tracking.
 
@@ -37,7 +36,7 @@ def create_source_model(model: Type[BaseModel]) -> Type[BaseModel]:
 
         # Handle nested Pydantic models
         if isinstance(original_type, type) and issubclass(original_type, BaseModel):
-            return create_source_model(original_type)
+            return create_model_with_source(original_type)
 
         # Handle NoneType for optional fields
         if original_type is type(None):
