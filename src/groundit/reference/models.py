@@ -4,6 +4,11 @@ from typing import TypeVar, Generic
 
 T = TypeVar('T')
 
+description = """
+The exact place in the source text from which the value was extracted OR inferred.
+"""
+
+
 class FieldWithSource(BaseModel, Generic[T]):
     """
     A generic container that wraps a field's value to add source tracking.
@@ -13,7 +18,4 @@ class FieldWithSource(BaseModel, Generic[T]):
     which the value was extracted.
     """
     value: T = Field(description="The extracted value, preserving the original type.")
-    source_quote: str | None = Field(
-        default=None,
-        description="The exact sentence or phrase from the source text from which the value was extracted."
-    )
+    source_quote: str = Field(description=description)
