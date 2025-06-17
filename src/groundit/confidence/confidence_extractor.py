@@ -203,3 +203,100 @@ def get_confidence_scores(
         aggregator=aggregator,
         debug=debug
     )
+
+
+def add_confidence_scores(
+    extraction_result: dict[str, Any],
+    tokens: list[TokensWithLogprob],
+    aggregator: AggregationFunction = default_sum_aggregator,
+    debug: bool = False
+) -> dict[str, Any]:
+    """
+    adds a "confidence" field at the same level of existing leaf fields with a _confidence suffix
+    e.g.
+    input:
+    {
+        "names": [
+            {
+                "value": "John Doe",
+                "source_quote": "the name of the patient is John Doe"
+            },
+            {
+                "value": "Jane Doe",
+                "source_quote": "the name of the patient is Jane Doe"
+            }
+        ],
+        "age": {
+            "value": 30,
+            "source_quote": "the age of the patient is 30"
+        },
+        "city": {
+            "value": "New York",
+            "source_quote": "the city of the patient is New York"
+        }
+    }
+    output:
+    {
+        "names": [
+            {
+            "value": "John Doe",
+            "source_quote": "the name of the patient is John Doe",
+            "value_confidence": 0.90,
+            "source_quote_confidence": 0.90
+            },
+            {
+                "value": "Jane Doe",
+                "source_quote": "the name of the patient is Jane Doe",
+                "value_confidence": 0.90,
+                "source_quote_confidence": 0.90
+            }
+        ],
+        "age": {
+            "value": 30,
+            "source_quote": "the age of the patient is 30",
+            "value_confidence": 0.90,
+            "source_quote_confidence": 0.90
+        },
+        "city": {
+            "value": "New York",
+            "source_quote": "the city of the patient is New York",
+            "value_confidence": 0.90,
+            "source_quote_confidence": 0.90
+        }
+    }
+    """
+    import copy
+    
+    confidence_scores = get_confidence_scores(json_string_tokens=tokens, aggregator=aggregator, debug=debug)
+    
+    def add_confidence_recursive(data, confidence_data):
+        """Recursively add confidence scores to fields"""
+        
+        if isinstance(data, dict) and isinstance(confidence_data, dict):
+            # Create a list of items to avoid modifying dict during iteration
+            items_to_process = list(data.items())
+            
+            # Process each field in the dict
+            for key, value in items_to_process:
+                if key in confidence_data:
+                    # If value is a nested structure, recurse into it
+                    if isinstance(value, (dict, list)):
+                        add_confidence_recursive(value, confidence_data[key])
+                    else:
+                        # Only add confidence score for leaf values (non-dict, non-list)
+                        data[f"{key}_confidence"] = confidence_data[key]
+                    
+        elif isinstance(data, list) and isinstance(confidence_data, list):
+            # Handle lists
+            for i, item in enumerate(data):
+                if i < len(confidence_data):
+                    add_confidence_recursive(item, confidence_data[i])
+    
+    # Create a deep copy to avoid modifying the original
+    enriched_result = copy.deepcopy(extraction_result)
+    
+    # Add confidence scores to the copy
+    add_confidence_recursive(enriched_result, confidence_scores)
+    
+    return enriched_result
+
