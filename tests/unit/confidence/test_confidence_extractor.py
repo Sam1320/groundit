@@ -6,7 +6,7 @@ from pydantic import BaseModel, ValidationError
 
 from groundit.confidence.logprobs_aggregators import default_sum_aggregator
 from groundit.confidence.models import TokensWithLogprob
-from groundit.confidence.confidence_extractor import get_confidence_scores
+from groundit.confidence.confidence_extractor import get_confidence_scores, add_confidence_scores
 from tests.utils import create_confidence_model
 from tests.models import (NestedModel, TEST_OBJECT)
 
@@ -126,4 +126,117 @@ def test_confidence_model_validation():
     # Auto-generated model correctly rejects None
     with pytest.raises(ValidationError):
         NestedModelConfidence.model_validate(invalid_confidence_output)
+
+
+def test_add_confidence_scores_simple():
+    """Test add_confidence_scores with simple nested dict structure."""
+    
+    # Sample extraction result with nested structure
+    extraction_result = {
+        "first_name": {
+            "value": "John",
+            "source_quote": "First name: John"
+        },
+        "last_name": {
+            "value": "Doe", 
+            "source_quote": "Last name: Doe"
+        }
+    }
+    
+    # Mock tokens for testing
+    json_string = '{"first_name":{"value":"John","source_quote":"First name: John"},"last_name":{"value":"Doe","source_quote":"Last name: Doe"}}'
+    tokens = string_to_tokens(json_string)
+    
+    result = add_confidence_scores(
+        extraction_result=extraction_result,
+        tokens=tokens,
+        aggregator=default_sum_aggregator
+    )
+    
+    # Check that confidence fields are added at leaf level only
+    assert "value_confidence" in result["first_name"]
+    assert "source_quote_confidence" in result["first_name"]
+    assert "value_confidence" in result["last_name"]
+    assert "source_quote_confidence" in result["last_name"]
+    
+    # Check that no confidence fields are added at root level
+    assert "first_name_confidence" not in result
+    assert "last_name_confidence" not in result
+    
+    # Check that confidence values are floats
+    assert isinstance(result["first_name"]["value_confidence"], float)
+    assert isinstance(result["first_name"]["source_quote_confidence"], float)
+
+
+def test_add_confidence_scores_flat_structure():
+    """Test add_confidence_scores with flat structure (leaf values only)."""
+    
+    extraction_result = {
+        "name": "Alice",
+        "age": 25,
+        "city": "New York"
+    }
+    
+    json_string = '{"name":"Alice","age":25,"city":"New York"}'
+    tokens = string_to_tokens(json_string)
+    
+    result = add_confidence_scores(
+        extraction_result=extraction_result,
+        tokens=tokens,
+        aggregator=default_sum_aggregator
+    )
+    
+    # Check that confidence fields are added for leaf values
+    assert "name_confidence" in result
+    assert "age_confidence" in result
+    assert "city_confidence" in result
+    
+    # Original values should remain
+    assert result["name"] == "Alice"
+    assert result["age"] == 25
+    assert result["city"] == "New York"
+
+
+def test_add_confidence_scores_with_lists():
+    """Test add_confidence_scores with list structures."""
+    
+    extraction_result = {
+        "items": [
+            {"name": "item1", "value": 10},
+            {"name": "item2", "value": 20}
+        ]
+    }
+    
+    json_string = '{"items":[{"name":"item1","value":10},{"name":"item2","value":20}]}'
+    tokens = string_to_tokens(json_string)
+    
+    result = add_confidence_scores(
+        extraction_result=extraction_result,
+        tokens=tokens,
+        aggregator=default_sum_aggregator
+    )
+    
+    # Check that confidence fields are added to leaf values in list items
+    assert "name_confidence" in result["items"][0]
+    assert "value_confidence" in result["items"][0]
+    assert "name_confidence" in result["items"][1]
+    assert "value_confidence" in result["items"][1]
+    
+    # Check that no confidence field is added for the list itself
+    assert "items_confidence" not in result
+
+
+def test_add_confidence_scores_empty_dict():
+    """Test add_confidence_scores with empty dict."""
+    
+    extraction_result = {}
+    tokens = string_to_tokens('{}')
+    
+    result = add_confidence_scores(
+        extraction_result=extraction_result,
+        tokens=tokens,
+        aggregator=default_sum_aggregator
+    )
+    
+    assert result == {}
 
