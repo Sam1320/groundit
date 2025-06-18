@@ -1,8 +1,10 @@
 """Tests for create_source_model function."""
 
-from pydantic import BaseModel
+import json
+from pydantic import BaseModel, Field
+from rich import print_json
 
-from groundit.reference.create_model_with_source import create_model_with_source
+from groundit.reference.create_model_with_source import create_model_with_source, create_json_schema_with_source
 from groundit.reference.models import FieldWithSource
 from tests.models import Simple, Nested, WithLists
 from tests.utils import validate_source_model_schema
@@ -60,3 +62,84 @@ class TestCreateSourceModel:
         assert instance.name.value == "John"
         assert instance.age.value == 30
     
+
+
+
+class TestCreateJsonSchemaWithSource:
+    """Test the create_json_schema_with_source function."""
+
+    def test_simple_json_schema_transformation(self):
+        """Test transformation of a simple JSON schema."""
+        class SimpleModel(BaseModel):
+            first_name: str = Field(description="The first name.")
+        
+        ModelWithSource = create_model_with_source(SimpleModel)
+
+        json_schema = SimpleModel.model_json_schema()
+        expected_json_schema = ModelWithSource.model_json_schema()
+
+        transformed_json_schema = create_json_schema_with_source(json_schema)
+
+        print_json(json.dumps(transformed_json_schema, indent=2))
+        print("-" * 100)
+        print_json(json.dumps(expected_json_schema, indent=2))
+        print("-" * 100)
+
+        assert transformed_json_schema == expected_json_schema
+
+    def test_with_lists_json_schema_transformation(self):
+        """Test transformation of a JSON schema with list fields."""
+        from tests.models import WithLists
+        
+        ModelWithSource = create_model_with_source(WithLists)
+        
+        json_schema = WithLists.model_json_schema()
+        expected_json_schema = ModelWithSource.model_json_schema()
+
+        transformed_json_schema = create_json_schema_with_source(json_schema)
+
+        print_json(json.dumps(transformed_json_schema, indent=2))
+        print("-" * 100)
+        print_json(json.dumps(expected_json_schema, indent=2))
+        print("-" * 100)
+
+        assert transformed_json_schema == expected_json_schema
+
+    
+    def test_nested_json_schema_transformation(self):
+        """Test transformation of a nested JSON schema."""
+        from tests.models import Nested
+        
+        ModelWithSource = create_model_with_source(Nested)
+        
+        json_schema = Nested.model_json_schema()
+        expected_json_schema = ModelWithSource.model_json_schema()
+
+        transformed_json_schema = create_json_schema_with_source(json_schema)
+
+        print_json(json.dumps(transformed_json_schema, indent=2))
+        print("-" * 100)
+        print_json(json.dumps(expected_json_schema, indent=2))
+        print("-" * 100)
+
+        assert transformed_json_schema == expected_json_schema
+
+
+    def test_complex_nested_model_json_schema_transformation(self):
+        """Test transformation of a complex nested JSON schema."""
+        from tests.models import NestedModel
+        
+        ModelWithSource = create_model_with_source(NestedModel)
+        
+        json_schema = NestedModel.model_json_schema()
+        expected_json_schema = ModelWithSource.model_json_schema()
+
+        transformed_json_schema = create_json_schema_with_source(json_schema)
+
+        print_json(json.dumps(transformed_json_schema, indent=2))
+        print("-" * 100)
+        print_json(json.dumps(expected_json_schema, indent=2))
+        print("-" * 100)
+
+        assert transformed_json_schema == expected_json_schema
+

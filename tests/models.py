@@ -29,7 +29,7 @@ class Preferences(BaseModel):
 class Profile(BaseModel):
     name: str
     preferences: Preferences
-    bio: str | None
+    bio: str
 
 
 class Stats(BaseModel):
@@ -61,7 +61,7 @@ TEST_OBJECT = NestedModel(
                 notifications=True,
                 marketing_emails=False
             ),
-            bio=None
+            bio="Alice is a software engineer at Google."
         ),
         stats=Stats(
             posts=42,
