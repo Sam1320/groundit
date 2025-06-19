@@ -90,4 +90,30 @@ def validate_source_model_schema(original_model: type[BaseModel], model_with_sou
             assert type_with_source is FieldWithSource[original_type], \
                 f"Leaf field '{field_name}' of type {original_type} should become FieldWithSource[{original_type}], but got {type_with_source}."
 
-        validate_type(original_field.annotation, field_with_source.annotation, field_name) 
+        validate_type(original_field.annotation, field_with_source.annotation, field_name)
+
+
+def validate_source_spans(data: dict | list, source_text: str):
+    """
+    Recursively validate that source spans correctly match source quotes.
+    
+    Args:
+        data: The data structure with potential source spans
+        source_text: The original source document
+    """
+    if isinstance(data, dict):
+        if 'source_span' in data and 'source_quote' in data and data['source_quote'] is not None:
+            span = data['source_span']
+            quote = data['source_quote']
+            
+            if span != [-1, -1]:
+                extracted_text = source_text[span[0]:span[1]]
+                assert extracted_text == quote, \
+                    f"Span validation failed. Expected '{quote}', got '{extracted_text}'"
+        
+        for value in data.values():
+            validate_source_spans(value, source_text)
+    
+    elif isinstance(data, list):
+        for item in data:
+            validate_source_spans(item, source_text) 

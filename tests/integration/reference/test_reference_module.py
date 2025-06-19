@@ -4,6 +4,7 @@ from groundit.reference.add_source_spans import add_source_spans
 from groundit.reference.create_model_with_source import create_model_with_source
 from pydantic import BaseModel, Field
 from datetime import date
+from tests.utils import validate_source_spans
 
 
 JSON_EXTRACTION_SYSTEM_PROMPT = """
@@ -12,60 +13,6 @@ Return null if the document does not contain information relevant to schema.
 Return only the JSON with no explanation text.
 """
 
-DOCUMENT = """
-<logo>MVZ im Fürstenberg-Karree Berlin<logo>
-
-MVZ im Fürstenberg-Karree Berlin - Alexanderplatz 5 - 10178 Berlin
-
-Dr. med. Markus Schneider-Burrus
-Medicum Zentrum Berlin
-Friedrichstraße 250
-10245 Berlin
-
-E-Nr: *D2020-008873*
-
-Name: Müller
-Vorname: Moritz
-Geburtsdatum: 06.03.1998
-
-23.06.2020
-
-Probeneingang: 23.06.2020
-Probenmaterial/klinische Angaben:
-V. a. malignes Melanom, DD Nävus, Nagel Dig. V rechts, 1. Nagelbiopsie, 2. Nagelbett.
-
-Makroskopie:
-In zwei Gefäßen übersandt: 1., 2. Jeweils eine runde Probe von 3 mm Durchmesser. Vollständige Einbettung, 2 Paraffinblöcke, Schnittstufen, HE, PAS-Färbung, Immunhistologie.
-
-Mikroskopie:
-1. Kompakter, regelhaft aufgebauter Nagel, lediglich fokal gering zerfasert und mit geringer Parakeratose. Keine abnorme Pigmentierung. Das miterfasste Epithel atypiefrei, keine melanozytären Nester.
-Sox 10: Negativ.
-2. Weiterer kompakter Nagel und atypiefreies Nagelbett.
-PAS-Färbung: Kein Nachweis von Pilzhyphen oder -sporen.
-Sox 10: Vereinzelte, regelhafte Melanozyten in der Junktionszone.
-
-Diagnosen 1. + 2.): überwiegend regelhafter Nagel und tumorfreies Nagelbett
-Lokalisation: Dig. V rechts Nagel und Nagelbett
-
-Beide Proben wurden vollständig aufgearbeitet und immunhistologisch untersucht, dabei kein Nachweis einer melanozytären Neoplasie, kein Anhalt für Malignität.
-
-Priv.-Doz. Dr. med. Lars Moravec
-
-Dieser Befund wurde elektronisch erstellt und freigegeben und ist auch ohne Unterschrift gültig.
-
-<page_number>1 von 2<page_number>
-"""
-
-
-@pytest.fixture
-def openai_client(openai_api_key):
-    """Create OpenAI client with API key."""
-    try:
-        import openai
-    except ImportError:
-        pytest.skip("OpenAI package not installed")
-    
-    return openai.OpenAI(api_key=openai_api_key)
 
 
 
@@ -92,33 +39,8 @@ class TestReferenceModule:
     4. Validating the correctness of the generated source spans.
     """
 
-    def _validate_source_spans(self, data: dict | list, source_text: str):
-        """
-        Recursively traverse an extraction result and verify that each `source_span`
-        correctly points to its corresponding `source_quote` in the original text.
-        """
-        if isinstance(data, dict):
-            # Check if this is a field with source tracking information
-            if 'source_span' in data and 'source_quote' in data and data['source_quote'] is not None:
-                span = data['source_span']
-                quote = data['source_quote']
-                
-                # Check if a valid span was found
-                if span != [-1, -1]:
-                    extracted_text = source_text[span[0]:span[1]]
-                    assert extracted_text == quote, \
-                        f"Span validation failed. Expected '{quote}', got '{extracted_text}'"
 
-            # Recurse into dictionary values
-            for value in data.values():
-                self._validate_source_spans(value, source_text)
-        
-        elif isinstance(data, list):
-            # Recurse into list items
-            for item in data:
-                self._validate_source_spans(item, source_text)
-
-    def test_extraction_and_grounding(self, openai_client):
+    def test_extraction_and_grounding(self, openai_client, test_document):
         """
         Test the full data extraction and grounding pipeline.
         
@@ -139,7 +61,7 @@ class TestReferenceModule:
                 },
                 {
                     "role": "user",
-                    "content": DOCUMENT
+                    "content": test_document
                 }
             ],
             logprobs=True,
@@ -149,10 +71,10 @@ class TestReferenceModule:
         
         # 3. Add character-level source spans to the extraction result
         parsed_content = json.loads(content)
-        enriched_result = add_source_spans(parsed_content, DOCUMENT)
+        enriched_result = add_source_spans(parsed_content, test_document)
         
         # 4. Validate that the generated spans correctly match the quotes
-        self._validate_source_spans(enriched_result, DOCUMENT)
+        validate_source_spans(enriched_result, test_document)
         
         # 5. Validate that the final result can be loaded back into the Pydantic model
         final_instance = response_model_with_source.model_validate(enriched_result)

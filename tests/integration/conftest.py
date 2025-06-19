@@ -13,6 +13,25 @@ def openai_api_key() -> str:
     return api_key
 
 
+@pytest.fixture
+def openai_client(openai_api_key):
+    """Create OpenAI client with API key."""
+    try:
+        import openai
+    except ImportError:
+        pytest.skip("OpenAI package not installed")
+    
+    return openai.OpenAI(api_key=openai_api_key)
+
+
+@pytest.fixture(scope="session")
+def test_document():
+    """Load the test document from the data directory."""
+    test_doc_path = os.path.join(os.path.dirname(__file__), "..", "data", "example_doc.txt")
+    with open(test_doc_path, "r", encoding="utf-8") as f:
+        return f.read()
+
+
 # Pytest markers for integration tests
 pytestmark = [
     pytest.mark.integration,  # Mark all tests in this directory as integration

@@ -1,25 +1,23 @@
-from pydantic import BaseModel, Field
-from datetime import date
-from groundit import create_model_with_source, add_source_spans, get_confidence_scores, average_probability_aggregator
-from groundit.confidence.confidence_extractor import add_confidence_scores
-import openai
-from rich import print, print_json
-from rich.pretty import pprint
+"""Integration tests for the complete groundit pipeline.
+
+This module tests the full end-to-end workflow of using groundit
+for data extraction with both Pydantic models and JSON schemas.
+"""
+
 import json
+import pytest
+from datetime import date
+from pydantic import BaseModel, Field
+from rich.pretty import pprint
 
-model = "gpt-4.1"
-
-class Patient(BaseModel):
-    """
-    A simplified model representing a patient resource,
-    with inline definitions for Identifier and HumanName.
-    """
-    # name: list[HumanName] = Field(description="A name associated with the patient.")
-    first_name: str = Field(description="The part of a name that links to the genealogy. In some cultures (e.g. Korean, Japanese, Vietnamese) this comes first.")
-    last_name: str = Field(description="Given names (not always 'first'). Includes middle names.")
-    # gender: str = Field(description="The gender of the patient. [male, female, other]")
-    birthDate: date = Field(description="The date of birth for the individual.")
-    # insurance_number: str = Field(description="The insurance number of the patient.")
+from groundit import (
+    create_model_with_source,
+    create_json_schema_with_source, 
+    add_source_spans,
+    add_confidence_scores,
+    average_probability_aggregator
+)
+from tests.utils import validate_source_spans
 
 
 JSON_EXTRACTION_SYSTEM_PROMPT = """
@@ -29,75 +27,209 @@ If the information is present implicitly, fill the source field with the text th
 Return only the JSON with no explanation text.
 """
 
-def extract_from_text(
-    model: str,
-    document: str,
-    response_format: BaseModel,
-) -> dict:
-    """
-    Extract structured data from text using Gemini model.
+
+
+class Patient(BaseModel):
+    """Simple patient model for testing extraction."""
+    first_name: str = Field(description="The given name of the patient")
+    last_name: str = Field(description="The family name of the patient")
+    birthDate: date = Field(description="The date of birth for the individual")
+
+
+@pytest.mark.integration
+@pytest.mark.slow
+class TestGrounditPipeline:
+    """Integration tests for the complete groundit pipeline."""
     
-    Args:
-        text: Text to extract data from
-        json_schema: Schema describing the expected JSON structure
+    @pytest.mark.parametrize("model", ["gpt-4o-mini"])
+    def test_pydantic_model_full_pipeline(self, openai_client, test_document, model):
+        """
+        Test the complete groundit pipeline using Pydantic models.
         
-    Returns:
-        Extracted JSON data
-    """
-    messages = [
-        {
-            "role": "system",
-            "content": JSON_EXTRACTION_SYSTEM_PROMPT
-        },
-        {
-            "role": "user",
-            "content": document
-        }
-    ]
+        This test verifies:
+        1. Model transformation with create_model_with_source
+        2. LLM extraction with transformed model
+        3. Confidence score addition
+        4. Source span addition
+        5. Validation of final enriched result
+        """
+        # 1. Transform the Pydantic model to include source tracking
+        patient_with_source = create_model_with_source(Patient)
+        
+        # 2. Extract data using the transformed model
+        response = openai_client.beta.chat.completions.parse(
+            model=model,
+            messages=[
+                {"role": "system", "content": JSON_EXTRACTION_SYSTEM_PROMPT},
+                {"role": "user", "content": test_document}
+            ],
+            logprobs=True,
+            response_format=patient_with_source
+        )
+        
+        # Parse the response
+        content = response.choices[0].message.content
+        extraction_result = json.loads(content)
+        tokens = response.choices[0].logprobs.content
+        
+        # 3. Add confidence scores
+        result_with_confidence = add_confidence_scores(
+            extraction_result=extraction_result,
+            tokens=tokens,
+            aggregator=average_probability_aggregator
+        )
+        
+        # 4. Add source spans
+        final_result = add_source_spans(result_with_confidence, test_document)
+        
+        # 5. Validate the complete pipeline result
+        # Validate structure can be loaded back into the model
+        validated_instance = patient_with_source.model_validate(final_result)
+        assert validated_instance is not None
+        
+        # Validate that source spans are correct
+        validate_source_spans(final_result, test_document) 
 
-        # 2. Use the transformed model to extract data from the document
-    response = openai.beta.chat.completions.parse(
-        model=model,
-        messages=messages,
-        logprobs=True,
-        response_format=response_format
-    )
-    # logprobs = response.choices[0].logprobs.content
-    # content = response.choices[0].message.content
-    return response
+        # Validate confidence scores exist and are valid probabilities
+        assert 0 < final_result["first_name"]["value_confidence"] <= 1.0
+        assert 0 < final_result["last_name"]["value_confidence"] <= 1.0
+        assert 0 < final_result["birthDate"]["value_confidence"] <= 1.0
+        assert 0 < final_result["first_name"]["source_quote_confidence"] <= 1.0
+        assert 0 < final_result["last_name"]["source_quote_confidence"] <= 1.0
+        assert 0 < final_result["birthDate"]["source_quote_confidence"] <= 1.0
+        
 
-# file_path = "data/nail_biopsy_2020.txt"
-file_path = "tests/integration/data/example_doc.txt"
-with open(file_path, "r") as file:
-    document = file.read()
-
-response_format = create_model_with_source(Patient)
-
-# extract the data
-result = extract_from_text(model=model, document=document, response_format=response_format)
-
-content = result.choices[0].message.content
-
-print_json(content)
-print("-" * 100)
-
-content_dict = json.loads(content)
-
-# result_with_spans = add_source_spans(json.loads(content), document)
-# pprint(result_with_spans, expand_all=True)
-# print("-" * 100)
-
-logprobs = result.choices[0].logprobs.content
-# confidence_scores = get_confidence_scores(json_string_tokens=logprobs, aggregator=average_probability_aggregator)
-# pprint(confidence_scores, expand_all=True)
-
-result_with_confidence = add_confidence_scores(
-    extraction_result=content_dict,
-    tokens=logprobs,
-    aggregator=average_probability_aggregator
-)
-pprint(result_with_confidence, expand_all=True)
-
-
-result_with_spans = add_source_spans(result_with_confidence, document)
-pprint(result_with_spans, expand_all=True)
+        print("="*50)
+        pprint(final_result, expand_all=True)
+    
+    @pytest.mark.parametrize("model", ["gpt-4o-mini"])
+    def test_json_schema_full_pipeline(self, openai_client, test_document, model):
+        """
+        Test the complete groundit pipeline using JSON schemas.
+        
+        This test verifies:
+        1. JSON schema transformation with create_json_schema_with_source
+        2. LLM extraction with transformed schema
+        3. Confidence score addition
+        4. Source span addition
+        5. Validation that results match Pydantic model approach
+        """
+        # 1. Transform the JSON schema to include source tracking
+        original_schema = Patient.model_json_schema()
+        transformed_schema = create_json_schema_with_source(original_schema)
+        
+        # 2. Extract data using the transformed JSON schema
+        response = openai_client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": JSON_EXTRACTION_SYSTEM_PROMPT},
+                {"role": "user", "content": test_document}
+            ],
+            logprobs=True,
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "patient_extraction",
+                    "schema": transformed_schema
+                }
+            }
+        )
+        
+        # Parse the response
+        content = response.choices[0].message.content
+        extraction_result = json.loads(content)
+        tokens = response.choices[0].logprobs.content
+        
+        # 3. Add confidence scores
+        result_with_confidence = add_confidence_scores(
+            extraction_result=extraction_result,
+            tokens=tokens,
+            aggregator=average_probability_aggregator
+        )
+        
+        # 4. Add source spans
+        final_result = add_source_spans(result_with_confidence, test_document)
+        
+        # 5. Validate the complete pipeline result
+        # Validate that source spans are correct
+        validate_source_spans(final_result, test_document)
+        
+        # Validate basic extraction accuracy
+        assert "moritz" in final_result["first_name"]["value"].lower()
+        assert "müller" in final_result["last_name"]["value"].lower()
+        assert final_result["birthDate"]["value"] == "1998-03-06"
+        
+        # Validate confidence scores exist and are valid probabilities
+        assert 0 < final_result["first_name"]["value_confidence"] <= 1.0
+        assert 0 < final_result["last_name"]["value_confidence"] <= 1.0
+        assert 0 < final_result["birthDate"]["value_confidence"] <= 1.0
+        assert 0 < final_result["first_name"]["source_quote_confidence"] <= 1.0
+        assert 0 < final_result["last_name"]["source_quote_confidence"] <= 1.0
+        assert 0 < final_result["birthDate"]["source_quote_confidence"] <= 1.0
+        
+        # Validate the result can be loaded into the Pydantic model
+        patient_with_source = create_model_with_source(Patient)
+        validated_instance = patient_with_source.model_validate(final_result)
+        assert validated_instance is not None
+        
+        print("\n" + "="*50)
+        print("JSON SCHEMA PIPELINE RESULT")
+        print("="*50)
+        pprint(final_result, expand_all=True)
+    
+    def test_pipeline_consistency(self, openai_client, test_document):
+        """
+        Test that Pydantic model and JSON schema approaches produce equivalent results.
+        
+        This test verifies that both transformation approaches (runtime model vs schema)
+        produce structurally identical results when used in the complete pipeline.
+        """
+        model = "gpt-4o-mini"
+        
+        # Get results from both approaches
+        # Pydantic approach
+        patient_with_source = create_model_with_source(Patient)
+        pydantic_response = openai_client.beta.chat.completions.parse(
+            model=model,
+            messages=[
+                {"role": "system", "content": JSON_EXTRACTION_SYSTEM_PROMPT},
+                {"role": "user", "content": test_document}
+            ],
+            logprobs=True,
+            response_format=patient_with_source
+        )
+        
+        # JSON schema approach  
+        original_schema = Patient.model_json_schema()
+        transformed_schema = create_json_schema_with_source(original_schema)
+        schema_response = openai_client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": JSON_EXTRACTION_SYSTEM_PROMPT},
+                {"role": "user", "content": test_document}
+            ],
+            logprobs=True,
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "patient_extraction",
+                    "schema": transformed_schema
+                }
+            }
+        )
+        
+        # Process both results through the same pipeline
+        pydantic_result = json.loads(pydantic_response.choices[0].message.content)
+        schema_result = json.loads(schema_response.choices[0].message.content)
+        
+        # Both should have the same structure (keys and nested structure)
+        assert set(pydantic_result.keys()) == set(schema_result.keys())
+        
+        # Both should be valid according to the source model
+        patient_with_source.model_validate(pydantic_result)
+        patient_with_source.model_validate(schema_result)
+        
+        print("\n" + "="*50)
+        print("PIPELINE CONSISTENCY VERIFICATION")
+        print("="*50)
+        print("Both approaches produce structurally compatible results")
