@@ -27,7 +27,7 @@ class Patient(BaseModel):
 class TestGrounditPipeline:
     """Integration tests for the complete groundit pipeline."""
     
-    def test_pydantic_model_full_pipeline(self, test_document):
+    def test_pydantic_model_full_pipeline(self, openai_client, test_document):
         """
         Test the complete groundit pipeline using Pydantic models.
         
@@ -57,7 +57,7 @@ class TestGrounditPipeline:
         print("="*50)
         pprint(final_result, expand_all=True)
     
-    def test_json_schema_full_pipeline(self, test_document):
+    def test_json_schema_full_pipeline(self, openai_client, test_document):
         """
         Test the complete groundit pipeline using JSON schemas.
         
@@ -89,7 +89,7 @@ class TestGrounditPipeline:
         print("="*50)
         pprint(final_result, expand_all=True)
     
-    def test_pipeline_consistency(self, test_document):
+    def test_pipeline_consistency(self, openai_client, test_document):
         """
         Test that Pydantic model and JSON schema approaches produce equivalent results.
         

@@ -4,7 +4,12 @@ from pydantic import BaseModel
 from openai import OpenAI
 
 from groundit.confidence.confidence_extractor import add_confidence_scores, get_confidence_scores
-from groundit.confidence.logprobs_aggregators import AggregationFunction
+from groundit.confidence.logprobs_aggregators import (
+    AggregationFunction,
+    average_probability_aggregator,
+    joint_probability_aggregator,
+    default_sum_aggregator
+)
 from groundit.reference.add_source_spans import add_source_spans
 from groundit.reference.create_model_with_source import create_model_with_source, create_json_schema_with_source
 from groundit.config import (
@@ -109,6 +114,10 @@ __all__ = [
     "add_source_spans",
     "create_model_with_source",
     "create_json_schema_with_source",
+    "AggregationFunction",
+    "average_probability_aggregator",
+    "joint_probability_aggregator",
+    "default_sum_aggregator",
     "DEFAULT_EXTRACTION_PROMPT",
     "DEFAULT_LLM_MODEL",
     "DEFAULT_PROBABILITY_AGGREGATOR",

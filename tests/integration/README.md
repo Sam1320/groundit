@@ -20,11 +20,6 @@ export OPENAI_API_KEY="your-openai-key-here"
 export ANTHROPIC_API_KEY="your-anthropic-key-here"
 ```
 
-Or use your `apikey` command as mentioned in your user rules:
-```bash
-apikey  # This will expose the required keys
-```
-
 ## Running Tests
 
 ### Run All Integration Tests

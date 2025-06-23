@@ -112,7 +112,7 @@ result = groundit(
 
 ## Requirements
 
-- Python 3.8+
+- Python 3.12+
 - OpenAI API key
 - `OPENAI_API_KEY` environment variable
 

@@ -8,9 +8,22 @@ wheels/
 
 # Virtual environments
 .venv
+.env
 
-# VSCode
+# IDE
 .vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
 
 # Sandbox
 sandbox/
