@@ -1,6 +1,5 @@
 from typing import Any, TypeAlias
 import json
-from rich import print
 
 from lark import Lark, Token, Transformer_NonRecursive, Tree, v_args
 from lark.tree import Meta

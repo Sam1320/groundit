@@ -8,7 +8,6 @@ dependencies = [
     "lark>=1.2.2", # for creating JSON syntax tree and converting leaves to scores
     "openai>=1.84.0",
     "pydantic>=2.11.5",
-    "rich>=14.0.0", # for pretty printing json data
 ]
 license = "MIT"
 authors = [
@@ -40,6 +39,7 @@ dev = [
     "pytest>=8.4.0",
     "ruff>=0.12.0",
     "tiktoken>=0.9.0",
+    "rich>=14.0.0", # for pretty printing in tests and debug output
 ]
 
 # Optional dependencies for integration tests
