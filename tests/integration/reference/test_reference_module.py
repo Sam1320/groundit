@@ -1,5 +1,4 @@
 import json
-import pytest
 from groundit.reference.add_source_spans import add_source_spans
 from groundit.reference.create_model_with_source import create_model_with_source
 from pydantic import BaseModel, Field
