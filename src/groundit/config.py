@@ -4,7 +4,7 @@ from groundit.confidence.logprobs_aggregators import average_probability_aggrega
 
 
 DEFAULT_EXTRACTION_PROMPT = """Extract data from the following document based on the JSON schema.
-Return null if the document does not contain information relevant to schema.
+Return null *only if* the document clearly does *not* contain information relevant to the schema.
 If the information is present implicitly, fill the source field with the text that contains the information.
 Return only the JSON with no explanation text."""
 

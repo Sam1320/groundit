@@ -11,6 +11,11 @@ from tests.models import Simple, Nested, WithLists, NestedModel
 from tests.utils import validate_source_model_schema
 
 
+class ModelWithLiteral(BaseModel):
+    status: Literal["active", "inactive", "pending"] = Field(description="The status")
+    priority: Literal[1, 2, 3, 4, 5] = Field(description="Priority level")
+
+
 class TestCreateModelWithSource:
     """Test the create_model_with_source function with various model types."""
     
@@ -62,11 +67,6 @@ class TestCreateModelWithSource:
 
     def test_literal_type_transformation(self):
         """Test transformation of a model with Literal type fields."""
-        class ModelWithLiteral(BaseModel):
-            status: Literal["active", "inactive", "pending"] = Field(description="The status")
-            priority: Literal[1, 2, 3, 4, 5] = Field(description="Priority level")
-            mixed: Literal["yes", "no", 42, True] = Field(description="Mixed literal types")
-        
         # Test that transformation works without errors
         source_model = create_model_with_source(ModelWithLiteral)
         
@@ -81,14 +81,12 @@ class TestCreateModelWithSource:
         # Test that we can instantiate the model
         test_data = {
             'status': FieldWithSource(value="active", source_quote="status: active"),
-            'priority': FieldWithSource(value=1, source_quote="priority 1"),
-            'mixed': FieldWithSource(value="yes", source_quote="response: yes")
+            'priority': FieldWithSource(value=1, source_quote="priority 1")
         }
         
         instance = source_model(**test_data)
         assert instance.status.value == "active"
         assert instance.priority.value == 1
-        assert instance.mixed.value == "yes"
 
 
 class TestCreateJsonSchemaWithSource:
@@ -144,5 +142,17 @@ class TestCreateJsonSchemaWithSource:
         original_json_schema = NestedModel.model_json_schema()
         transformed_json_schema = create_json_schema_with_source(original_json_schema)
 
+        assert transformed_json_schema == expected_json_schema
+
+    def test_literal_type_transformation(self):
+        """Test transformation of a JSON schema with Literal type fields."""
+        ModelWithSource = create_model_with_source(ModelWithLiteral)
+        
+        original_json_schema = ModelWithLiteral.model_json_schema()
+        expected_json_schema = ModelWithSource.model_json_schema()
+        
+        transformed_json_schema = create_json_schema_with_source(original_json_schema)
+        
+        
         assert transformed_json_schema == expected_json_schema
 

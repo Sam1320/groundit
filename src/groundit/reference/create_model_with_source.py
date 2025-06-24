@@ -135,6 +135,46 @@ def create_json_schema_with_source(json_schema: dict) -> dict:
         field_with_source_defs[key] = fws_schema
         return key
 
+    def _ensure_fws_literal_definition(enum_values: list, json_type: str) -> str:
+        """Return the *definition key* for a Literal type with enum values.
+        
+        Creates a FieldWithSource definition that preserves the enum constraint
+        in the value field, matching the behavior of create_model_with_source.
+        """
+        # Create a temporary Literal type to generate the correct schema
+        from typing import Literal
+        
+        # Generate FieldWithSource schema for this specific Literal type
+        literal_type = Literal[tuple(enum_values)]
+        fws_schema: dict[str, Any] = FieldWithSource[literal_type].model_json_schema()
+        
+        # Create the key manually using the same pattern Pydantic uses
+        # Pattern observation:
+        # - Integers: "1__2__3__4__5__" (double underscores between)
+        # - Strings: "__active____inactive____pending___" (underscores around each)
+        key_parts = []
+        for val in enum_values:
+            if isinstance(val, str):
+                key_parts.append(f"_{val}_")
+            else:
+                key_parts.append(str(val))
+        
+        if all(isinstance(v, str) for v in enum_values):
+            # All strings: join parts (already wrapped with _) with double underscores, add trailing underscore
+            key_suffix = "__".join(key_parts) + "__"
+        else:
+            # Non-strings (integers, etc.): join with double underscores, add trailing underscore
+            key_suffix = "__".join(key_parts) + "__"
+        
+        key = f"FieldWithSource_Literal_{key_suffix}"
+        
+        if key in field_with_source_defs:
+            return key
+        
+        # Store the schema (should be root level, not nested)
+        field_with_source_defs[key] = fws_schema
+        return key
+
     # ------------------------------------------------------------------
     # First pass – transform *definitions* as they might be referenced from
     # multiple places in the main schema.
@@ -188,6 +228,17 @@ def create_json_schema_with_source(json_schema: dict) -> dict:
             if node.get("type") == "array" and "items" in node:
                 node["items"] = _transform_schema(node["items"])
                 return node
+
+            # Handle enum fields (Literal types in Pydantic) before primitive types
+            if "enum" in node:
+                enum_values = node["enum"]
+                json_type = node.get("type")  # May be None for mixed type enums
+                description = node.get("description")
+                ref_key = _ensure_fws_literal_definition(enum_values, json_type)
+                new_node: dict[str, Any] = {"$ref": f"#/$defs/{ref_key}"}
+                if description is not None:
+                    new_node["description"] = description
+                return new_node
 
             # Primitive leaf – replace with FieldWithSource ref.
             if "type" in node and node["type"] in PRIMITIVE_JSON_TYPES:
