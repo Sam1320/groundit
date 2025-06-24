@@ -1,6 +1,7 @@
 """Tests for create_source_model function."""
 
 import json
+from typing import Literal
 from pydantic import BaseModel, Field
 from rich import print_json
 
@@ -58,6 +59,36 @@ class TestCreateModelWithSource:
         instance = source_model(**test_data)
         assert instance.name.value == "John"
         assert instance.age.value == 30    
+
+    def test_literal_type_transformation(self):
+        """Test transformation of a model with Literal type fields."""
+        class ModelWithLiteral(BaseModel):
+            status: Literal["active", "inactive", "pending"] = Field(description="The status")
+            priority: Literal[1, 2, 3, 4, 5] = Field(description="Priority level")
+            mixed: Literal["yes", "no", 42, True] = Field(description="Mixed literal types")
+        
+        # Test that transformation works without errors
+        source_model = create_model_with_source(ModelWithLiteral)
+        
+        # Test that JSON schema generation works (this was the original issue)
+        schema = source_model.model_json_schema()
+        assert schema is not None
+        assert "properties" in schema
+        
+        # Validate the model structure
+        validate_source_model_schema(ModelWithLiteral, source_model)
+        
+        # Test that we can instantiate the model
+        test_data = {
+            'status': FieldWithSource(value="active", source_quote="status: active"),
+            'priority': FieldWithSource(value=1, source_quote="priority 1"),
+            'mixed': FieldWithSource(value="yes", source_quote="response: yes")
+        }
+        
+        instance = source_model(**test_data)
+        assert instance.status.value == "active"
+        assert instance.priority.value == 1
+        assert instance.mixed.value == "yes"
 
 
 class TestCreateJsonSchemaWithSource:

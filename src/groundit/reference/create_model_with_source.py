@@ -1,4 +1,4 @@
-from typing import Type, get_origin, get_args
+from typing import Type, get_origin, get_args, Literal
 from pydantic import BaseModel, create_model, Field
 from groundit.reference.models import FieldWithSource
 
@@ -29,6 +29,10 @@ def create_model_with_source(model: Type[BaseModel]) -> Type[BaseModel]:
         origin = get_origin(original_type)
 
         if origin:  # Handles generic types like list, union, etc.
+            # Special case: Literal types should be wrapped as a whole
+            if origin is Literal:
+                return FieldWithSource[original_type]
+            
             args = get_args(original_type)
             transformed_args = tuple(_transform_type(arg) for arg in args)
             

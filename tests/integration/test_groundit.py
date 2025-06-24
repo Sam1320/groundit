@@ -4,6 +4,7 @@ This module tests the full end-to-end workflow of using groundit
 for data extraction with both Pydantic models and JSON schemas.
 """
 
+from typing import Literal
 import pytest
 from pydantic import BaseModel, Field
 from rich.pretty import pprint
@@ -19,6 +20,8 @@ class Patient(BaseModel):
     """Simple patient model for testing extraction."""
     first_name: str = Field(description="The given name of the patient")
     last_name: str = Field(description="The family name of the patient")
+    birthDate: str = Field(description="The date of birth for the individual")
+    gender: Literal["male", "female", "other"] = Field(description="The gender of the patient")
     birthDate: str = Field(description="The date of birth for the individual")
 
 
@@ -49,9 +52,11 @@ class TestGrounditPipeline:
         assert 0 < final_result["first_name"]["value_confidence"] <= 1.0
         assert 0 < final_result["last_name"]["value_confidence"] <= 1.0
         assert 0 < final_result["birthDate"]["value_confidence"] <= 1.0
+        assert 0 < final_result["gender"]["value_confidence"] <= 1.0
         assert 0 < final_result["first_name"]["source_quote_confidence"] <= 1.0
         assert 0 < final_result["last_name"]["source_quote_confidence"] <= 1.0
         assert 0 < final_result["birthDate"]["source_quote_confidence"] <= 1.0
+        assert 0 < final_result["gender"]["source_quote_confidence"] <= 1.0
         
 
         print("="*50)
