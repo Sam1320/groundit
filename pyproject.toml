@@ -1,6 +1,6 @@
 [project]
 name = "groundit"
-version = "0.1.0"
+version = "0.1.2"
 description = "Groundit adds source references and confidence scores to ensure your AI outputs are verifiable and trustworthy."
 readme = "README.md"
 requires-python = ">=3.12"
