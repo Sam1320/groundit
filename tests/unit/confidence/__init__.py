@@ -1,1 +1,1 @@
-"""Unit tests for groundit.confidence module.""" 
+"""Unit tests for groundit.confidence module."""

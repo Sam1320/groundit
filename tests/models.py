@@ -57,19 +57,11 @@ TEST_OBJECT = NestedModel(
         profile=Profile(
             name="Alice",
             preferences=Preferences(
-                theme="dark",
-                notifications=True,
-                marketing_emails=False
+                theme="dark", notifications=True, marketing_emails=False
             ),
-            bio="Alice is a software engineer at Google."
+            bio="Alice is a software engineer at Google.",
         ),
-        stats=Stats(
-            posts=42,
-            followers=1337
-        )
+        stats=Stats(posts=42, followers=1337),
     ),
-    metadata=Metadata(
-        created="2024-01-01",
-        version="1.0"
-    )
-) 
+    metadata=Metadata(created="2024-01-01", version="1.0"),
+)

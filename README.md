@@ -58,7 +58,7 @@ print(result)
         'value': 45,
         'source_quote': '45 years old',
         'value_confidence': 0.92,
-        'source_quote_confidence': 0.94  
+        'source_quote_confidence': 0.94
     },
     'diagnosis': {
         'value': 'Type 2 Diabetes',
@@ -163,7 +163,7 @@ print(result_with_confidence)
 
 ## Acknowledgments
 
-This project was bootstrapped using implementation ideas from [structured-logprobs](https://github.com/arena-ai/structured-logprobs). 
+This project was bootstrapped using implementation ideas from [structured-logprobs](https://github.com/arena-ai/structured-logprobs).
 
 ## License
 

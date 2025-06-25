@@ -21,7 +21,7 @@ def average_probability_aggregator(logprobs: list[float]) -> float:
 def joint_probability_aggregator(logprobs: list[float]) -> float:
     """
     Aggregation function that computes the joint probability (converts to probability space).
-    
+
     For independent events, joint probability is the product of individual probabilities.
     Since we have log probabilities, we sum them and then exponentiate.
     """

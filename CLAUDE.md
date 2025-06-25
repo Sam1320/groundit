@@ -85,7 +85,7 @@ Modules work together in a typical flow:
 ### Important Design Decisions
 
 1. **Non-Destructive Enrichment**: Both modules create enriched copies rather than modifying originals
-2. **Dual API Strategy**: Runtime vs schema transformation for different use cases  
+2. **Dual API Strategy**: Runtime vs schema transformation for different use cases
 3. **Pluggable Aggregation**: `AggregationFunction` type enables different confidence calculation strategies
 4. **Generic Type Integration**: Heavy use of Python typing for type safety through transformations
 
@@ -101,12 +101,12 @@ Modules work together in a typical flow:
 Integration tests require environment variables:
 ```bash
 export OPENAI_API_KEY="your-key"
-export ANTHROPIC_API_KEY="your-key" 
+export ANTHROPIC_API_KEY="your-key"
 ```
 
 ## Module Exports
 Key functions available at package level:
 - `get_confidence_scores()`, `add_confidence_scores()` - Confidence scoring
 - `average_probability_aggregator()` - Aggregation function
-- `add_source_spans()` - Source span tracking  
+- `add_source_spans()` - Source span tracking
 - `create_model_with_source()` - Model transformation

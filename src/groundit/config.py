@@ -1,6 +1,9 @@
 """Default configuration values for groundit."""
 
-from groundit.confidence.logprobs_aggregators import average_probability_aggregator, AggregationFunction
+from groundit.confidence.logprobs_aggregators import (
+    average_probability_aggregator,
+    AggregationFunction,
+)
 
 
 DEFAULT_EXTRACTION_PROMPT = """Extract data from the following document based on the JSON schema.

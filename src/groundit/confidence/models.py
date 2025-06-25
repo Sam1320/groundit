@@ -6,7 +6,6 @@ class TopLogprob(BaseModel):
     token: str
     """The token."""
 
-
     bytes: list[int] | None = None
     """A list of integers representing the UTF-8 bytes representation of the token.
 
@@ -53,7 +52,6 @@ class TokensWithLogprob(BaseModel):
     """
 
 
-
 class ChatCompletionMessage(BaseModel):
     content: str | None = None
     """The contents of the message."""
@@ -61,14 +59,16 @@ class ChatCompletionMessage(BaseModel):
     role: Literal["assistant"]
     """The role of the author of this message."""
 
+
 class ChoiceLogprobs(BaseModel):
     content: list[TokensWithLogprob] | None = None
     """A list of message content tokens with log probability information."""
 
 
-
 class Choice(BaseModel):
-    finish_reason: Literal["stop", "length", "tool_calls", "content_filter", "function_call"]
+    finish_reason: Literal[
+        "stop", "length", "tool_calls", "content_filter", "function_call"
+    ]
     """The reason the model stopped generating tokens.
 
     This will be `stop` if the model hit a natural stop point or a provided stop

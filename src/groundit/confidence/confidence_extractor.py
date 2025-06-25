@@ -4,9 +4,14 @@ import json
 from lark import Lark, Token, Transformer_NonRecursive, Tree, v_args
 from lark.tree import Meta
 from groundit.confidence.models import TokensWithLogprob
-from groundit.confidence.logprobs_aggregators import AggregationFunction, default_sum_aggregator
+from groundit.confidence.logprobs_aggregators import (
+    AggregationFunction,
+    default_sum_aggregator,
+)
 
-PyTree: TypeAlias = Any  # a tree-like structure built out of container-like Python objects.
+PyTree: TypeAlias = (
+    Any  # a tree-like structure built out of container-like Python objects.
+)
 
 
 # Define a grammar for JSON
@@ -35,7 +40,9 @@ json_grammar = r"""
 """
 
 
-def _map_characters_to_token_indices(extracted_data_token: list[TokensWithLogprob]) -> list[int]:
+def _map_characters_to_token_indices(
+    extracted_data_token: list[TokensWithLogprob],
+) -> list[int]:
     """
     Maps each character in the JSON string output to its corresponding token index.
 
@@ -85,9 +92,11 @@ class Extractor(Transformer_NonRecursive):
         token_start = self.token_indices[start_pos]
         token_end = self.token_indices[end_pos]
         if self.debug:
-            print("tokens being aggregated", [self.tokens[i].token for i in range(token_start, token_end)])
+            print(
+                "tokens being aggregated",
+                [self.tokens[i].token for i in range(token_start, token_end)],
+            )
         return [self.tokens[i].logprob for i in range(token_start, token_end)]
-
 
     def _compute_aggregated_value(self, start_pos: int, end_pos: int) -> float:
         """Compute aggregated value using the configured aggregation function."""
@@ -100,7 +109,7 @@ class Extractor(Transformer_NonRecursive):
     def string(self, meta: Meta, children: list[Token]) -> float:
         # Adjust positions to exclude opening and closing quotes
         content_start = meta.start_pos + 1  # Skip opening quote
-        content_end = meta.end_pos - 1      # Skip closing quote
+        content_end = meta.end_pos - 1  # Skip closing quote
         return self._compute_aggregated_value(content_start, content_end)
 
     def true(self, meta: Meta, children: list[Token]) -> float:
@@ -124,7 +133,9 @@ class Extractor(Transformer_NonRecursive):
     def pair(self, meta: Meta, children: list[Any]) -> tuple[str, Any]:
         value = children[1]
         key = children[0]
-        if isinstance(value, Tree) and not value.children:  # ['b', Tree(Token('RULE', 'value'), [])]
+        if (
+            isinstance(value, Tree) and not value.children
+        ):  # ['b', Tree(Token('RULE', 'value'), [])]
             value = None
         return key, value
 
@@ -136,9 +147,9 @@ class Extractor(Transformer_NonRecursive):
 
 
 def _replace_leaves_with_confidence_scores(
-    json_string: str, 
-    tokens: list[TokensWithLogprob], 
-    token_indices: list[int], 
+    json_string: str,
+    tokens: list[TokensWithLogprob],
+    token_indices: list[int],
     aggregator: AggregationFunction = default_sum_aggregator,
     debug: bool = False,
 ) -> PyTree:
@@ -156,37 +167,41 @@ def _replace_leaves_with_confidence_scores(
         PyTree: The parsed JSON data.
     """
 
-    json_parser = Lark(json_grammar, parser="lalr", propagate_positions=True, maybe_placeholders=False)
+    json_parser = Lark(
+        json_grammar, parser="lalr", propagate_positions=True, maybe_placeholders=False
+    )
     tree = json_parser.parse(json_string)
     if debug:
         print(tree.pretty())
     extractor = Extractor(tokens, token_indices, aggregator, debug)
     return extractor.transform(tree)
 
-def _validate_json_string_tokens(json_string_tokens: list[TokensWithLogprob]) -> bool:
+
+def _validate_json_string_tokens(json_string_tokens: list[TokensWithLogprob]) -> str:
     """
-    Validates if the given JSON string is valid.
+    Validates if the given JSON string is valid and returns the JSON string.
     """
     json_string = "".join([logprob.token for logprob in json_string_tokens])
     try:
         json.loads(json_string)
+        return json_string
     except json.JSONDecodeError:
         raise ValueError("The token list does not represent a valid JSON string")
-    return json_string
-    
+
+
 def get_confidence_scores(
     json_string_tokens: list[TokensWithLogprob],
     aggregator: AggregationFunction = default_sum_aggregator,
-    debug: bool = False
+    debug: bool = False,
 ) -> dict[str, Any]:
     """
     Takes a list of tokens representing a JSON string and returns the same JSON string with the leaves replaced with confidence scores.
-    
+
     Args:
         json_string_tokens: A list of TokensWithLogprob objects representing a JSON string
         aggregator: The function to use for aggregating log probabilities
         debug: Whether to print debug information
-        
+
     Returns:
         The parsed JSON data with leaves replaced by confidence scores
     """
@@ -200,7 +215,7 @@ def get_confidence_scores(
         tokens=json_string_tokens,
         token_indices=token_indices,
         aggregator=aggregator,
-        debug=debug
+        debug=debug,
     )
 
 
@@ -208,7 +223,7 @@ def add_confidence_scores(
     extraction_result: dict[str, Any],
     tokens: list[TokensWithLogprob],
     aggregator: AggregationFunction = default_sum_aggregator,
-    debug: bool = False
+    debug: bool = False,
 ) -> dict[str, Any]:
     """
     adds a "confidence" field at the same level of existing leaf fields with a _confidence suffix
@@ -265,16 +280,18 @@ def add_confidence_scores(
     }
     """
     import copy
-    
-    confidence_scores = get_confidence_scores(json_string_tokens=tokens, aggregator=aggregator, debug=debug)
-    
+
+    confidence_scores = get_confidence_scores(
+        json_string_tokens=tokens, aggregator=aggregator, debug=debug
+    )
+
     def add_confidence_recursive(data, confidence_data):
         """Recursively add confidence scores to fields"""
-        
+
         if isinstance(data, dict) and isinstance(confidence_data, dict):
             # Create a list of items to avoid modifying dict during iteration
             items_to_process = list(data.items())
-            
+
             # Process each field in the dict
             for key, value in items_to_process:
                 if key in confidence_data:
@@ -284,18 +301,17 @@ def add_confidence_scores(
                     else:
                         # Only add confidence score for leaf values (non-dict, non-list)
                         data[f"{key}_confidence"] = confidence_data[key]
-                    
+
         elif isinstance(data, list) and isinstance(confidence_data, list):
             # Handle lists
             for i, item in enumerate(data):
                 if i < len(confidence_data):
                     add_confidence_recursive(item, confidence_data[i])
-    
+
     # Create a deep copy to avoid modifying the original
     enriched_result = copy.deepcopy(extraction_result)
-    
+
     # Add confidence scores to the copy
     add_confidence_recursive(enriched_result, confidence_scores)
-    
-    return enriched_result
 
+    return enriched_result

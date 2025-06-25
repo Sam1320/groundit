@@ -20,14 +20,16 @@ def openai_client(openai_api_key):
         import openai
     except ImportError:
         pytest.skip("OpenAI package not installed")
-    
+
     return openai.OpenAI(api_key=openai_api_key)
 
 
 @pytest.fixture(scope="session")
 def test_document():
     """Load the test document from the data directory."""
-    test_doc_path = os.path.join(os.path.dirname(__file__), "..", "data", "example_doc.txt")
+    test_doc_path = os.path.join(
+        os.path.dirname(__file__), "..", "data", "example_doc.txt"
+    )
     with open(test_doc_path, "r", encoding="utf-8") as f:
         return f.read()
 
@@ -35,7 +37,7 @@ def test_document():
 # Pytest markers for integration tests
 pytestmark = [
     pytest.mark.integration,  # Mark all tests in this directory as integration
-    pytest.mark.slow,         # Mark them as slow (requires network calls)
+    pytest.mark.slow,  # Mark them as slow (requires network calls)
 ]
 
 
@@ -46,4 +48,4 @@ def pytest_configure(config):
     )
     config.addinivalue_line(
         "markers", "slow: marks tests as slow (makes network calls)"
-    ) 
+    )

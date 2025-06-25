@@ -1,0 +1,35 @@
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+    -   id: check-yaml
+    -   id: check-toml
+    -   id: check-json
+    -   id: end-of-file-fixer
+    -   id: trailing-whitespace
+    -   id: check-merge-conflict
+    -   id: check-added-large-files
+
+-   repo: local
+    hooks:
+    -   id: format
+        name: Format
+        entry: make
+        args: [format]
+        types: [python]
+        language: system
+        pass_filenames: false
+    -   id: lint
+        name: Lint
+        entry: make
+        args: [lint]
+        types: [python]
+        language: system
+        pass_filenames: false
+    -   id: typecheck
+        name: Type Check
+        entry: make
+        args: [typecheck]
+        types: [python]
+        language: system
+        pass_filenames: false

@@ -1,6 +1,7 @@
-from typing import Type, get_origin, get_args, Literal
+from typing import Type, get_origin, get_args, Literal, Any
 from pydantic import BaseModel, create_model, Field
 from groundit.reference.models import FieldWithSource
+
 
 # TODO: top level description is not preserved
 def create_model_with_source(model: Type[BaseModel]) -> Type[BaseModel]:
@@ -23,7 +24,7 @@ def create_model_with_source(model: Type[BaseModel]) -> Type[BaseModel]:
     Returns:
         A new Pydantic model class with source tracking capabilities.
     """
-    
+
     def _transform_type(original_type: Type) -> Type:
         """Recursively transforms a type annotation."""
         origin = get_origin(original_type)
@@ -31,11 +32,11 @@ def create_model_with_source(model: Type[BaseModel]) -> Type[BaseModel]:
         if origin:  # Handles generic types like list, union, etc.
             # Special case: Literal types should be wrapped as a whole
             if origin is Literal:
-                return FieldWithSource[original_type]
-            
+                return FieldWithSource[original_type]  # type: ignore[misc]
+
             args = get_args(original_type)
             transformed_args = tuple(_transform_type(arg) for arg in args)
-            
+
             return origin[transformed_args]
 
         # Handle nested Pydantic models
@@ -52,11 +53,11 @@ def create_model_with_source(model: Type[BaseModel]) -> Type[BaseModel]:
     transformed_fields = {}
     for field_name, field_info in model.model_fields.items():
         new_type = _transform_type(field_info.annotation)
-        
+
         # Create a new Field, preserving the original description and default value
         new_field = Field(
             description=field_info.description,
-            default=field_info.default if not field_info.is_required() else ...
+            default=field_info.default if not field_info.is_required() else ...,
         )
         transformed_fields[field_name] = (new_type, new_field)
 
@@ -93,8 +94,8 @@ def create_json_schema_with_source(json_schema: dict) -> dict:
     # representation to avoid the overhead of reconstructing Pydantic models.
 
     from copy import deepcopy
-    from typing import Any, Mapping
-    
+    from typing import Mapping
+
     # We start with a deep-copy so that the input is never mutated in place.
     original_schema: dict[str, Any] = deepcopy(json_schema)
 
@@ -128,7 +129,9 @@ def create_json_schema_with_source(json_schema: dict) -> dict:
             return key
 
         # Generate the schema for the specialised FieldWithSource model.
-        fws_schema: dict[str, Any] = FieldWithSource[_json_to_py_type[json_type]].model_json_schema()
+        fws_schema: dict[str, Any] = FieldWithSource[
+            _json_to_py_type[json_type]  # type: ignore[misc]
+        ].model_json_schema()
 
         # ``model_json_schema`` produces a *root* schema – we store it directly
         # under ``$defs`` with the key computed above.
@@ -137,17 +140,17 @@ def create_json_schema_with_source(json_schema: dict) -> dict:
 
     def _ensure_fws_literal_definition(enum_values: list, json_type: str) -> str:
         """Return the *definition key* for a Literal type with enum values.
-        
+
         Creates a FieldWithSource definition that preserves the enum constraint
         in the value field, matching the behavior of create_model_with_source.
         """
         # Create a temporary Literal type to generate the correct schema
         from typing import Literal
-        
+
         # Generate FieldWithSource schema for this specific Literal type
         literal_type = Literal[tuple(enum_values)]
         fws_schema: dict[str, Any] = FieldWithSource[literal_type].model_json_schema()
-        
+
         # Create the key manually using the same pattern Pydantic uses
         # Pattern observation:
         # - Integers: "1__2__3__4__5__" (double underscores between)
@@ -158,19 +161,19 @@ def create_json_schema_with_source(json_schema: dict) -> dict:
                 key_parts.append(f"_{val}_")
             else:
                 key_parts.append(str(val))
-        
+
         if all(isinstance(v, str) for v in enum_values):
             # All strings: join parts (already wrapped with _) with double underscores, add trailing underscore
             key_suffix = "__".join(key_parts) + "__"
         else:
             # Non-strings (integers, etc.): join with double underscores, add trailing underscore
             key_suffix = "__".join(key_parts) + "__"
-        
+
         key = f"FieldWithSource_Literal_{key_suffix}"
-        
+
         if key in field_with_source_defs:
             return key
-        
+
         # Store the schema (should be root level, not nested)
         field_with_source_defs[key] = fws_schema
         return key

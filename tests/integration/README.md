@@ -76,4 +76,4 @@ When adding new integration tests:
 4. Include proper docstrings
 5. Handle missing dependencies/API keys gracefully
 6. Test both the extraction and confidence scoring aspects
-7. Use shared utilities from `tests.test_utils` for consistency 
+7. Use shared utilities from `tests.test_utils` for consistency
