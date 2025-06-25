@@ -40,6 +40,8 @@ dev = [
     "ruff>=0.12.0",
     "tiktoken>=0.9.0",
     "rich>=14.0.0", # for pretty printing in tests and debug output
+    "coverage>=7.9.1",
+    "pytest-cov>=6.2.1",
 ]
 
 # Optional dependencies for integration tests
@@ -61,6 +63,7 @@ addopts = [
     "--tb=short",                   # shorter traceback format
     "--strict-markers",             # error on unknown markers
     "--import-mode=importlib",      # modern import mode
+    "--cov=src",
 ]
 
 # Markers
@@ -75,3 +78,16 @@ filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::PendingDeprecationWarning",
 ]
+
+[tool.coverage.run]
+branch = true
+source = ["src"]
+command_line = "-m pytest"
+
+[tool.coverage.report]
+skip_covered = true
+show_missing = true
+fail_under = 70
+
+[tool.coverage.html]
+directory = "coverage_html_report"
