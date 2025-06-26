@@ -1,0 +1,44 @@
+name: Build and Publish
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build-and-publish:
+    name: Build and publish to PyPI
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Test with Coverage
+        run: |
+          uv run coverage run -m pytest
+          uv run coverage report
+
+      - name: Build package
+        run: uv build
+
+      - name: Test built package (smoke test)
+        run: |
+          # Test the wheel
+          uv run --with dist/*.whl --no-project -- python -c "import groundit; print('Wheel import: OK')"
+          # Test the source distribution
+          uv run --with dist/*.tar.gz --no-project -- python -c "import groundit; print('Source dist import: OK')"
+
+      - name: Publish to PyPI
+        run: uv publish --token ${{ secrets.PYPI_TOKEN }}
