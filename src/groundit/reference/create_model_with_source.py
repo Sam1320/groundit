@@ -3,7 +3,6 @@ from pydantic import BaseModel, create_model, Field
 from groundit.reference.models import FieldWithSource
 
 
-# TODO: top level description is not preserved
 def create_model_with_source(model: Type[BaseModel]) -> Type[BaseModel]:
     """
     Dynamically creates a new Pydantic model for source tracking.
