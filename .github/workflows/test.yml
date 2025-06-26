@@ -27,5 +27,8 @@ jobs:
         run: uv sync
       - name: Lint
         run: uv run ruff check .
-      - name: Test
-        run: uv run pytest
+      - name: Test with Coverage
+        run: |
+          uv run coverage run -m pytest
+          uv run coverage report  
+          uv run coverage html --title "GroundIt Coverage Report"
