@@ -36,7 +36,7 @@ jobs:
         run: |
           uv run coverage run -m pytest
           uv run coverage report
-          uv run coverage html --title "GroundIt Coverage Report"
+          uv run coverage html --title "Groundit Coverage Report for coverage for ${{ github.sha }}"
 
       - name: Store coverage files
         uses: actions/upload-artifact@v4

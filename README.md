@@ -4,9 +4,10 @@
 
 Groundit transforms AI data extraction into auditable, verifiable outputs. Every extracted value comes with confidence scores based on token probabilities and source quotes linking back to the original document.
 
+
 ## Key Features
 
-- **Source Tracking**: Every extracted value includes the exact text span from the source document
+- **Source Tracking**: Every extracted value includes the source quote (and its starting and ending char index) from the source document
 - **Confidence Scoring**: Token-level probability analysis provides confidence scores for extracted data
 - **Type Preservation**: Works seamlessly with Pydantic models and JSON schemas
 - **Simple API**: One function call handles the complete extraction pipeline
@@ -22,6 +23,8 @@ uv add groundit
 ```python
 from groundit import groundit
 from pydantic import BaseModel, Field
+
+os.environ["OPENAI_API_KEY"] = "sk-..."
 
 # Define your data model
 class Patient(BaseModel):
@@ -53,18 +56,21 @@ print(result)
         'source_quote': 'Patient: John Smith',
         'value_confidence': 0.95,
         'source_quote_confidence': 0.98
+        'source_span': [10,25]
     },
     'age': {
         'value': 45,
         'source_quote': '45 years old',
         'value_confidence': 0.92,
-        'source_quote_confidence': 0.94
+        'source_quote_confidence': 0.94,
+        'source_span': [30,45]
     },
     'diagnosis': {
         'value': 'Type 2 Diabetes',
         'source_quote': 'Type 2 Diabetes',
         'value_confidence': 0.97,
-        'source_quote_confidence': 0.99
+        'source_quote_confidence': 0.99,
+        'source_span': [47,62]
     }
 }
 ```
@@ -87,7 +93,7 @@ result = groundit(
     document=document,
     extraction_schema=Patient,
     extraction_prompt="Custom extraction instructions...",
-    llm_model="gpt-4o",
+    llm_model="openai/gpt-4.1",
     probability_aggregator=joint_probability_aggregator
 )
 ```
@@ -108,6 +114,31 @@ result = groundit(
     document=document,
     extraction_schema=json_schema
 )
+```
+
+### Hugging Face / Mistral example
+
+```python
+import os
+from groundit import groundit
+from pydantic import BaseModel, Field
+
+# 🔑  Set your HF token (or `huggingface-cli login` beforehand)
+os.environ["HUGGINGFACE_API_KEY"] = "hf_your_token_here"
+
+class Patient(BaseModel):
+    first_name: str = Field(description="Given name")
+    last_name: str = Field(description="Family name")
+
+doc = "John Doe, 1990-01-01, male"
+
+result = groundit(
+    document=doc,
+    extraction_model=Patient,
+    llm_model="huggingface/mistralai/Mistral-Small-3.1-24B-Instruct-2503",
+)
+
+print(result)
 ```
 
 ## Requirements

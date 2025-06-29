@@ -9,6 +9,7 @@ from groundit.confidence.models import TokensWithLogprob
 from groundit.confidence.confidence_extractor import (
     get_confidence_scores,
     add_confidence_scores,
+    GPT2_SPEC,
 )
 from tests.utils import create_confidence_model
 from tests.models import NestedModel, TEST_OBJECT
@@ -242,3 +243,74 @@ def test_add_confidence_scores_empty_dict():
     )
 
     assert result == {}
+
+
+# ---------------------------------------------------------------------------
+# GPT-2-style helper (Mistral, etc.) — produces tokens that already contain
+# sentinel characters like "Ġ" and "Ċ".
+# ---------------------------------------------------------------------------
+
+
+# Invert the sentinel replacement mapping so that we can turn a *readable* JSON
+# into the raw GPT-2 token stream representation used inside the test.
+
+_INV_SENTINELS = {v: k for k, v in GPT2_SPEC.sentinel_replacements.items()}
+
+
+def _json_to_gpt2_raw(json_text: str) -> str:
+    """Convert *json_text* by replacing spaces/newlines with GPT-2 sentinels and appending EOS."""
+
+    transformed = "".join(_INV_SENTINELS.get(ch, ch) for ch in json_text)
+    # Append the first stop token ("</s>") so that cleaning logic gets exercised.
+    if GPT2_SPEC.stop_tokens:
+        transformed += GPT2_SPEC.stop_tokens[0]
+    return transformed
+
+
+def string_to_tokens_gpt2(json_text: str) -> list[TokensWithLogprob]:
+    """Produce *TokensWithLogprob* for a readable JSON string using GPT-2 sentinels."""
+    # TODO: use properly tokenize the string.
+
+    raw_text = _json_to_gpt2_raw(json_text)
+
+    tokens: list[TokensWithLogprob] = []
+    i = 0
+    while i < len(raw_text):
+        if raw_text.startswith("</s>", i):
+            tok = "</s>"
+            i += len(tok)
+        else:
+            tok = raw_text[i]
+            i += 1
+
+        tokens.append(
+            TokensWithLogprob(
+                token=tok,
+                bytes=[ord(c) for c in tok],
+                logprob=-1.0,
+                top_logprobs=None,
+            )
+        )
+
+    return tokens
+
+
+# ---------------------------------------------------------------------------
+# New test exercising GPT-2/Mistral sentinel cleaning
+# ---------------------------------------------------------------------------
+
+
+def test_replace_leaves_with_confidence_scores_gpt2_style():
+    """Ensure the extractor works on raw tokens that contain GPT-2 sentinels."""
+
+    readable_json = '{ "first_name": "John",\n  "last_name": "Doe",\n  "birthDate": "1990-01-01T00:00:00Z"  }'
+
+    tokens = string_to_tokens_gpt2(readable_json)
+
+    output_json = get_confidence_scores(
+        json_string_tokens=tokens,
+        model_name="huggingface/mistralai/Mistral-Small-3.1-24B-Instruct-2503",
+    )
+
+    # After normalisation the JSON should parse into two keys.
+    assert set(output_json.keys()) == {"first_name", "last_name", "birthDate"}

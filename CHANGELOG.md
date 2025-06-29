@@ -15,6 +15,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refined extraction prompts for less false negatives when extracting data
 - Updated project version to 0.1.2
 
+## [0.1.3] - 2025-06-29
+
+### Added
+- Support for other models that provide `logprobs` (e.g. Mistral-Instruct, Gemma).  Confidence scoring now auto-detects tokenizer families and cleans sentinel characters accordingly.
+- Unit test covering GPT-2 style sentinel handling.
+
+### Changed
+- `confidence_extractor` refactored: model-aware cleaning/normalisation via `TokenizerSpec`.
+- `add_confidence_scores` and `groundit` now accept `model_name` so downstream logic can pick the right tokenizer behaviour.
+
 ## [0.1.0] - 2025-06-23
 
 ### Added
