@@ -1,7 +1,7 @@
 import json
 from typing import Any, Type, Optional
 from pydantic import BaseModel
-from openai import OpenAI
+from litellm import LiteLLM
 
 from groundit.confidence.confidence_extractor import (
     add_confidence_scores,
@@ -32,7 +32,7 @@ def groundit(
     extraction_prompt: Optional[str] = None,
     llm_model: str = DEFAULT_LLM_MODEL,
     probability_aggregator: AggregationFunction = DEFAULT_PROBABILITY_AGGREGATOR,
-    openai_client: Optional[OpenAI] = None,
+    litellm_client: Optional[LiteLLM] = None,
 ) -> dict[str, Any]:
     """
     Complete groundit pipeline for data extraction with confidence scores and source tracking.
@@ -48,9 +48,9 @@ def groundit(
         extraction_model: Pydantic model class for structured extraction (takes precedence if both provided)
         extraction_schema: JSON schema dict for extraction (used if extraction_model not provided)
         extraction_prompt: System prompt for guiding the extraction (uses default if None)
-        llm_model: OpenAI model to use for extraction
+        llm_model: model to use for extraction
         probability_aggregator: Function to aggregate token probabilities into confidence scores
-        openai_client: OpenAI client instance (creates default if None)
+        litellm_client: litellm client instance (creates default if None)
 
     Returns:
         Dictionary with extracted data enriched with confidence scores and source quotes
@@ -58,8 +58,8 @@ def groundit(
     Raises:
         ValueError: If neither extraction_model nor extraction_schema are provided
     """
-    if openai_client is None:
-        openai_client = OpenAI()
+    if litellm_client is None:
+        litellm_client = LiteLLM()
 
     if extraction_prompt is None:
         extraction_prompt = DEFAULT_EXTRACTION_PROMPT
@@ -68,7 +68,7 @@ def groundit(
         # Use Pydantic model approach
         model_with_source = create_model_with_source(extraction_model)
 
-        response = openai_client.beta.chat.completions.parse(
+        response = litellm_client.chat.completions.create(
             model=llm_model,
             messages=[
                 {"role": "system", "content": extraction_prompt},
@@ -81,7 +81,7 @@ def groundit(
         # Use JSON schema approach
         transformed_schema = create_json_schema_with_source(extraction_schema)
 
-        response = openai_client.chat.completions.create(
+        response = litellm_client.chat.completions.create(
             model=llm_model,
             messages=[
                 {"role": "system", "content": extraction_prompt},
@@ -108,6 +108,7 @@ def groundit(
     result_with_confidence = add_confidence_scores(
         extraction_result=extraction_result,
         tokens=tokens,
+        model_name=llm_model,
         aggregator=probability_aggregator,
     )
 

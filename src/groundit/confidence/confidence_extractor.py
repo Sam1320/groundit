@@ -1,5 +1,6 @@
 from typing import Any, TypeAlias
 import json
+from dataclasses import dataclass
 
 from lark import Lark, Token, Transformer_NonRecursive, Tree, v_args
 from lark.tree import Meta
@@ -177,20 +178,95 @@ def _replace_leaves_with_confidence_scores(
     return extractor.transform(tree)
 
 
-def _validate_json_string_tokens(json_string_tokens: list[TokensWithLogprob]) -> str:
+# ---------------------------------------------------------------------------
+# Tokenizer-specific configuration
+
+
+@dataclass(frozen=True, slots=True)
+class TokenizerSpec:
+    """Configuration for cleaning/normalisation steps per tokenizer family."""
+
+    # Mapping from sentinel char -> replacement byte (1 char) used *in order*
+    sentinel_replacements: dict[str, str]
+    # Tokens that signal end-of-sequence for that tokenizer/model family
+    stop_tokens: list[str]
+
+
+GPT2_SPEC = TokenizerSpec(
+    sentinel_replacements={
+        "Ċ": "\n",  # newline sentinel
+        "Ġ": " ",  # space sentinel
+    },
+    stop_tokens=["</s>"],
+)
+
+
+SENTENCE_PIECE_SPEC = TokenizerSpec(
+    sentinel_replacements={
+        "▁": " ",  # space sentinel
+    },
+    stop_tokens=["<end_of_turn>"],
+)
+
+
+BYTE_BPE_SPEC = TokenizerSpec(
+    sentinel_replacements={},
+    stop_tokens=[],  # OpenAI logprobs don't include explicit EOS
+)
+
+
+def _identify_tokenizer_spec(model_name: str | None) -> TokenizerSpec:
+    """Return the :class:`TokenizerSpec` appropriate for *model_name*.
+
+    The heuristic is simple string matching; this can be extended later if we
+    encounter more edge-cases.
     """
-    Validates if the given JSON string is valid and returns the JSON string.
-    """
-    json_string = "".join([logprob.token for logprob in json_string_tokens])
-    try:
-        json.loads(json_string)
-        return json_string
-    except json.JSONDecodeError:
-        raise ValueError("The token list does not represent a valid JSON string")
+
+    if model_name is None:
+        # Fallback to BYTE_BPE_SPEC (default for openai models)
+        return BYTE_BPE_SPEC
+
+    lower = model_name.lower()
+
+    # OpenAI models: "openai/…" or anything containing "gpt-4" / "gpt-3" etc.
+    if lower.startswith("openai/") or "gpt-" in lower:
+        return BYTE_BPE_SPEC
+
+    # SentencePiece-family (Gemma, Llama, etc.)
+    if any(x in lower for x in ("gemma", "llama", "deepseek")):
+        return SENTENCE_PIECE_SPEC
+
+    # Default for remaining HF instruction models (Mistral, Mixtral, GPT-NeoX …)
+    return GPT2_SPEC
+
+
+def _clean_tokens(
+    tokens: list[TokensWithLogprob],
+    spec: TokenizerSpec,
+) -> list[TokensWithLogprob]:
+    # Fast-path: nothing to strip
+    if not spec.stop_tokens:
+        return tokens
+
+    clean: list[TokensWithLogprob] = []
+    for t in tokens:
+        if t.token in spec.stop_tokens:
+            break  # stop at first EOS-like token
+        clean.append(t)
+    return clean
+
+
+# type: ignore[override]
+def _normalise_raw_json(raw: str, spec: TokenizerSpec) -> str:
+    text = raw
+    for sentinel, repl in spec.sentinel_replacements.items():
+        text = text.replace(sentinel, repl)
+    return text
 
 
 def get_confidence_scores(
     json_string_tokens: list[TokensWithLogprob],
+    model_name: str | None = None,
     aggregator: AggregationFunction = default_sum_aggregator,
     debug: bool = False,
 ) -> dict[str, Any]:
@@ -199,6 +275,7 @@ def get_confidence_scores(
 
     Args:
         json_string_tokens: A list of TokensWithLogprob objects representing a JSON string
+        model_name: The name of the model used to extract the JSON string (needed to identify the tokenizer family)
         aggregator: The function to use for aggregating log probabilities
         debug: Whether to print debug information
 
@@ -206,13 +283,36 @@ def get_confidence_scores(
         The parsed JSON data with leaves replaced by confidence scores
     """
 
-    json_string = _validate_json_string_tokens(json_string_tokens)
+    # ------------------------------------------------------------------
+    # 1. Drop EOS token(s) and obtain a clean token list
+    # ------------------------------------------------------------------
 
-    token_indices = _map_characters_to_token_indices(json_string_tokens)
+    spec = _identify_tokenizer_spec(model_name)
+
+    clean_tokens = _clean_tokens(json_string_tokens, spec)
+
+    # ------------------------------------------------------------------
+    # 2. Join tokens and normalise whitespace sentinels so that the string
+    #    becomes valid JSON that the downstream Lark grammar can parse.
+    # ------------------------------------------------------------------
+
+    raw_json_string = "".join(t.token for t in clean_tokens)
+
+    json_string = _normalise_raw_json(raw_json_string, spec)
+
+    # Validate that we ended up with syntactically correct JSON – this keeps
+    # error semantics identical to the previous implementation.
+    _validate_json_string_tokens_internal(json_string)
+
+    # ------------------------------------------------------------------
+    # 3. Character-to-token mapping and confidence extraction
+    # ------------------------------------------------------------------
+
+    token_indices = _map_characters_to_token_indices(clean_tokens)
 
     return _replace_leaves_with_confidence_scores(
         json_string=json_string,
-        tokens=json_string_tokens,
+        tokens=clean_tokens,
         token_indices=token_indices,
         aggregator=aggregator,
         debug=debug,
@@ -222,6 +322,8 @@ def get_confidence_scores(
 def add_confidence_scores(
     extraction_result: dict[str, Any],
     tokens: list[TokensWithLogprob],
+    *,
+    model_name: str | None = None,
     aggregator: AggregationFunction = default_sum_aggregator,
     debug: bool = False,
 ) -> dict[str, Any]:
@@ -282,7 +384,10 @@ def add_confidence_scores(
     import copy
 
     confidence_scores = get_confidence_scores(
-        json_string_tokens=tokens, aggregator=aggregator, debug=debug
+        json_string_tokens=tokens,
+        model_name=model_name,
+        aggregator=aggregator,
+        debug=debug,
     )
 
     def add_confidence_recursive(data, confidence_data):
@@ -315,3 +420,14 @@ def add_confidence_scores(
     add_confidence_recursive(enriched_result, confidence_scores)
 
     return enriched_result
+
+
+def _validate_json_string_tokens_internal(json_string: str) -> None:
+    """Raise :class:`ValueError` if *json_string* is not valid JSON."""
+
+    try:
+        json.loads(json_string)
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            "The token list does not represent a valid JSON string"
+        ) from exc

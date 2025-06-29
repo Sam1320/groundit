@@ -29,14 +29,20 @@ class Patient(BaseModel):
 class TestGrounditPipeline:
     """Integration tests for the complete groundit pipeline."""
 
-    def test_pydantic_model(self, openai_client, test_document):
+    @pytest.mark.parametrize(
+        "llm_model",
+        ["openai/gpt-4.1", "huggingface/mistralai/Mistral-Small-3.1-24B-Instruct-2503"],
+    )
+    def test_pydantic_model(self, openai_client, test_document, llm_model):
         """
         Test the complete groundit pipeline using Pydantic models.
 
         This test verifies the unified groundit() function works with Pydantic models.
         """
         # Use the unified groundit function
-        final_result = groundit(document=test_document, extraction_model=Patient)
+        final_result = groundit(
+            document=test_document, extraction_model=Patient, llm_model=llm_model
+        )
 
         # Validate the complete pipeline result
         # Validate structure can be loaded back into the model
@@ -59,7 +65,11 @@ class TestGrounditPipeline:
 
         pprint(final_result, expand_all=True)
 
-    def test_json_schema(self, openai_client, test_document):
+    @pytest.mark.parametrize(
+        "llm_model",
+        ["openai/gpt-4.1", "huggingface/mistralai/Mistral-Small-3.1-24B-Instruct-2503"],
+    )
+    def test_json_schema(self, openai_client, test_document, llm_model):
         """
         Test the complete groundit pipeline using JSON schemas.
 
@@ -68,7 +78,9 @@ class TestGrounditPipeline:
 
         json_schema = Patient.model_json_schema()
 
-        final_result = groundit(document=test_document, extraction_schema=json_schema)
+        final_result = groundit(
+            document=test_document, extraction_schema=json_schema, llm_model=llm_model
+        )
 
         # validate the result
         patient_with_source = create_model_with_source(Patient)
