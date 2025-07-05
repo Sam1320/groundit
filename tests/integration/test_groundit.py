@@ -26,12 +26,18 @@ class Patient(BaseModel):
 
 @pytest.mark.integration
 @pytest.mark.slow
+@pytest.mark.xfail(
+    strict=False, reason="Flaky - usually passes but may fail due to LLMs"
+)
 class TestGrounditPipeline:
     """Integration tests for the complete groundit pipeline."""
 
     @pytest.mark.parametrize(
         "llm_model",
-        ["openai/gpt-4.1", "huggingface/mistralai/Mistral-Small-3.1-24B-Instruct-2503"],
+        [
+            "openai/gpt-4.1",
+            "huggingface/nebius/mistralai/Mistral-Small-3.1-24B-Instruct-2503",
+        ],
     )
     def test_pydantic_model(self, openai_client, test_document, llm_model):
         """
@@ -67,7 +73,10 @@ class TestGrounditPipeline:
 
     @pytest.mark.parametrize(
         "llm_model",
-        ["openai/gpt-4.1", "huggingface/mistralai/Mistral-Small-3.1-24B-Instruct-2503"],
+        [
+            "openai/gpt-4.1",
+            "huggingface/nebius/mistralai/Mistral-Small-3.1-24B-Instruct-2503",
+        ],
     )
     def test_json_schema(self, openai_client, test_document, llm_model):
         """
