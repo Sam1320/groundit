@@ -156,3 +156,28 @@ class TestCreateJsonSchemaWithSource:
         transformed_json_schema = create_json_schema_with_source(original_json_schema)
 
         assert transformed_json_schema == expected_json_schema
+
+    def test_json_schema_with_verbalized_confidence(self):
+        """Test JSON schema transformation with FieldWithSourceAndConfidence."""
+        from groundit.reference.models import FieldWithSourceAndConfidence
+
+        class SimpleModel(BaseModel):
+            name: str = Field(description="The name.")
+            age: int = Field(description="The age.")
+
+        # Generate expected schema using runtime transformation
+        ModelWithConfidence = create_model_with_source(
+            SimpleModel, FieldWithSourceAndConfidence
+        )
+        expected_json_schema = ModelWithConfidence.model_json_schema()
+
+        # Generate schema using JSON schema transformation
+        original_json_schema = SimpleModel.model_json_schema()
+        transformed_json_schema = create_json_schema_with_source(
+            original_json_schema, FieldWithSourceAndConfidence
+        )
+
+        assert transformed_json_schema == expected_json_schema
+
+        # Verify the title reflects the confidence suffix
+        assert transformed_json_schema["title"] == "SimpleModelWithSourceAndConfidence"

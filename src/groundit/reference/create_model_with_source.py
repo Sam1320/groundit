@@ -70,24 +70,30 @@ def create_model_with_source(
     return create_model(source_model_name, **transformed_fields, __base__=BaseModel)
 
 
-def create_json_schema_with_source(json_schema: dict) -> dict:
+def create_json_schema_with_source(
+    json_schema: dict, enrichment_class: Type[FieldWithSource] = FieldWithSource
+) -> dict:
     """
     Convert a JSON-Schema *produced from a Pydantic model* into a new schema
     that mirrors the behaviour of :pyfunc:`create_model_with_source` at the
     *schema level*.
 
-    Each *leaf* value (i.e. a primitive type) is replaced by a reference to a
-    ``FieldWithSource`` definition while preserving the original description
+    Each *leaf* value (i.e. a primitive type) is replaced by a reference to an
+    enrichment class definition (e.g., ``FieldWithSource`` or
+    ``FieldWithSourceAndConfidence``) while preserving the original description
     and the overall structure of the document.  In addition, nested models
     declared in the ``$defs`` section are transformed recursively and the
-    resulting definitions are stored under a new name with the suffix
-    ``WithSource`` (e.g. ``Patient -> PatientWithSource``).
+    resulting definitions are stored under a new name with the appropriate suffix
+    (e.g. ``Patient -> PatientWithSource`` or ``Patient -> PatientWithSourceAndConfidence``).
 
     Parameters
     ----------
     json_schema:
         A mapping that follows the JSON-Schema spec (as returned by
         ``BaseModel.model_json_schema()``).
+    enrichment_class:
+        The enrichment class to use for leaf fields. Defaults to FieldWithSource
+        for backward compatibility.
 
     Returns
     -------
@@ -118,43 +124,46 @@ def create_json_schema_with_source(json_schema: dict) -> dict:
         "boolean": bool,
     }
 
-    # We lazily create FieldWithSource definitions as we encounter new leaf
+    # We lazily create enrichment class definitions as we encounter new leaf
     # types to avoid producing unused definitions.
-    field_with_source_defs: dict[str, dict[str, Any]] = {}
+    enrichment_defs: dict[str, dict[str, Any]] = {}
 
-    def _ensure_fws_definition(json_type: str) -> str:
+    def _ensure_enrichment_definition(json_type: str) -> str:
         """Return the *definition key* for the given JSON primitive type.
 
         If the definition doesn't exist yet it will be generated on-the-fly
-        using :pyclass:`FieldWithSource` so that the resulting schema matches
+        using the specified enrichment class so that the resulting schema matches
         exactly what Pydantic would have produced.
         """
-        key = f"FieldWithSource_{_json_to_py_type[json_type].__name__}_"
-        if key in field_with_source_defs:
+        enrichment_name = enrichment_class.__name__
+        key = f"{enrichment_name}_{_json_to_py_type[json_type].__name__}_"
+        if key in enrichment_defs:
             return key
 
-        # Generate the schema for the specialised FieldWithSource model.
-        fws_schema: dict[str, Any] = FieldWithSource[
+        # Generate the schema for the specialised enrichment class model.
+        enrichment_schema: dict[str, Any] = enrichment_class[
             _json_to_py_type[json_type]  # type: ignore[misc]
         ].model_json_schema()
 
         # ``model_json_schema`` produces a *root* schema – we store it directly
         # under ``$defs`` with the key computed above.
-        field_with_source_defs[key] = fws_schema
+        enrichment_defs[key] = enrichment_schema
         return key
 
-    def _ensure_fws_literal_definition(enum_values: list, json_type: str) -> str:
+    def _ensure_enrichment_literal_definition(enum_values: list, json_type: str) -> str:
         """Return the *definition key* for a Literal type with enum values.
 
-        Creates a FieldWithSource definition that preserves the enum constraint
+        Creates an enrichment class definition that preserves the enum constraint
         in the value field, matching the behavior of create_model_with_source.
         """
         # Create a temporary Literal type to generate the correct schema
         from typing import Literal
 
-        # Generate FieldWithSource schema for this specific Literal type
+        # Generate enrichment class schema for this specific Literal type
         literal_type = Literal[tuple(enum_values)]
-        fws_schema: dict[str, Any] = FieldWithSource[literal_type].model_json_schema()
+        enrichment_schema: dict[str, Any] = enrichment_class[
+            literal_type
+        ].model_json_schema()
 
         # Create the key manually using the same pattern Pydantic uses
         # Pattern observation:
@@ -174,13 +183,14 @@ def create_json_schema_with_source(json_schema: dict) -> dict:
             # Non-strings (integers, etc.): join with double underscores, add trailing underscore
             key_suffix = "__".join(key_parts) + "__"
 
-        key = f"FieldWithSource_Literal_{key_suffix}"
+        enrichment_name = enrichment_class.__name__
+        key = f"{enrichment_name}_Literal_{key_suffix}"
 
-        if key in field_with_source_defs:
+        if key in enrichment_defs:
             return key
 
         # Store the schema (should be root level, not nested)
-        field_with_source_defs[key] = fws_schema
+        enrichment_defs[key] = enrichment_schema
         return key
 
     # ------------------------------------------------------------------
@@ -193,10 +203,11 @@ def create_json_schema_with_source(json_schema: dict) -> dict:
 
     def _transform_definition(def_key: str, def_schema: dict[str, Any]) -> None:
         """Transform a definition in-place and register remapped ``$ref``s."""
-        transformed_key = f"{def_key}WithSource"
+        enrichment_suffix = enrichment_class.__name__.replace("FieldWith", "With")
+        transformed_key = f"{def_key}{enrichment_suffix}"
         ref_remap[f"#/$defs/{def_key}"] = f"#/$defs/{transformed_key}"
         transformed_schema = _transform_schema(def_schema)
-        # Update the title to reflect the WithSource suffix
+        # Update the title to reflect the enrichment suffix
         if isinstance(transformed_schema, dict) and "title" in transformed_schema:
             transformed_schema["title"] = transformed_key
         transformed_defs[transformed_key] = transformed_schema
@@ -242,17 +253,17 @@ def create_json_schema_with_source(json_schema: dict) -> dict:
                 enum_values = node["enum"]
                 json_type = node.get("type")  # May be None for mixed type enums
                 description = node.get("description")
-                ref_key = _ensure_fws_literal_definition(enum_values, json_type)
+                ref_key = _ensure_enrichment_literal_definition(enum_values, json_type)
                 new_node: dict[str, Any] = {"$ref": f"#/$defs/{ref_key}"}
                 if description is not None:
                     new_node["description"] = description
                 return new_node
 
-            # Primitive leaf – replace with FieldWithSource ref.
+            # Primitive leaf – replace with enrichment class ref.
             if "type" in node and node["type"] in PRIMITIVE_JSON_TYPES:
                 json_type = node["type"]
                 description = node.get("description")
-                ref_key = _ensure_fws_definition(json_type)
+                ref_key = _ensure_enrichment_definition(json_type)
                 new_node: dict[str, Any] = {"$ref": f"#/$defs/{ref_key}"}
                 if description is not None:
                     new_node["description"] = description
@@ -280,7 +291,8 @@ def create_json_schema_with_source(json_schema: dict) -> dict:
 
     # Adjust the root title to signal the new structure.
     if isinstance(transformed_root, dict) and "title" in transformed_root:
-        transformed_root["title"] = f"{transformed_root['title']}WithSource"
+        enrichment_suffix = enrichment_class.__name__.replace("FieldWith", "With")
+        transformed_root["title"] = f"{transformed_root['title']}{enrichment_suffix}"
 
     # ------------------------------------------------------------------
     # Assemble the final collection of definitions (original ones have been
@@ -289,8 +301,8 @@ def create_json_schema_with_source(json_schema: dict) -> dict:
     all_defs: dict[str, Any] = {}
     if transformed_defs:
         all_defs.update(transformed_defs)
-    if field_with_source_defs:
-        all_defs.update(field_with_source_defs)
+    if enrichment_defs:
+        all_defs.update(enrichment_defs)
     if all_defs:
         transformed_root["$defs"] = all_defs
 

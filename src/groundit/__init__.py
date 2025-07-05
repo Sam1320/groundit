@@ -98,13 +98,9 @@ def groundit(
         response = litellm_client.chat.completions.create(**request_params)  # type: ignore
     elif extraction_schema is not None:
         # Use JSON schema approach
-        # TODO: Update create_json_schema_with_source to support enrichment_class
-        if verbalized_confidence:
-            raise ValueError(
-                "verbalized_confidence is not yet supported with extraction_schema. Use extraction_model instead."
-            )
-
-        transformed_schema = create_json_schema_with_source(extraction_schema)
+        transformed_schema = create_json_schema_with_source(
+            extraction_schema, enrichment_class
+        )
 
         # Build request parameters conditionally
         request_params = {
