@@ -3,35 +3,40 @@ from pydantic import BaseModel, create_model, Field
 from groundit.reference.models import FieldWithSource
 
 
-def create_model_with_source(model: Type[BaseModel]) -> Type[BaseModel]:
+def create_model_with_source(
+    model: Type[BaseModel], enrichment_class: Type[FieldWithSource] = FieldWithSource
+) -> Type[BaseModel]:
     """
     Dynamically creates a new Pydantic model for source tracking.
 
     This function transforms a given Pydantic model into a new one where each
-    leaf field is replaced by a `FieldWithSource` generic model. This allows for
-    tracking the original text (`source_quote`) for each extracted value while
-    preserving the original field's type and description.
+    leaf field is replaced by an enrichment class (e.g., `FieldWithSource` or
+    `FieldWithSourceAndConfidence`). This allows for tracking the original text
+    (`source_quote`) for each extracted value while preserving the original
+    field's type and description.
 
-    - Leaf fields are converted to `FieldWithSource[OriginalType]`.
+    - Leaf fields are converted to `enrichment_class[OriginalType]`.
     - Nested Pydantic models are recursively transformed.
     - Lists and Unions are traversed to transform their inner types.
     - Field descriptions from the original model are preserved.
 
     Args:
         model: The original Pydantic model class to transform.
+        enrichment_class: The enrichment class to use for leaf fields.
+                         Defaults to FieldWithSource for backward compatibility.
 
     Returns:
         A new Pydantic model class with source tracking capabilities.
     """
 
-    def _transform_type(original_type: Type) -> Type:
+    def _transform_type(original_type: Type) -> Any:
         """Recursively transforms a type annotation."""
         origin = get_origin(original_type)
 
         if origin:  # Handles generic types like list, union, etc.
             # Special case: Literal types should be wrapped as a whole
             if origin is Literal:
-                return FieldWithSource[original_type]  # type: ignore[misc]
+                return enrichment_class[original_type]  # type: ignore[misc]
 
             args = get_args(original_type)
             transformed_args = tuple(_transform_type(arg) for arg in args)
@@ -40,14 +45,14 @@ def create_model_with_source(model: Type[BaseModel]) -> Type[BaseModel]:
 
         # Handle nested Pydantic models
         if isinstance(original_type, type) and issubclass(original_type, BaseModel):
-            return create_model_with_source(original_type)
+            return create_model_with_source(original_type, enrichment_class)
 
         # Handle NoneType for optional fields
         if original_type is type(None):
             return type(None)
 
-        # Base case: for leaf fields, wrap in FieldWithSource
-        return FieldWithSource[original_type]
+        # Base case: for leaf fields, wrap in enrichment_class
+        return enrichment_class[original_type]
 
     transformed_fields = {}
     for field_name, field_info in model.model_fields.items():
@@ -60,7 +65,8 @@ def create_model_with_source(model: Type[BaseModel]) -> Type[BaseModel]:
         )
         transformed_fields[field_name] = (new_type, new_field)
 
-    source_model_name = f"{model.__name__}WithSource"
+    enrichment_suffix = enrichment_class.__name__.replace("FieldWith", "With")
+    source_model_name = f"{model.__name__}{enrichment_suffix}"
     return create_model(source_model_name, **transformed_fields, __base__=BaseModel)
 
 

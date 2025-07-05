@@ -9,7 +9,7 @@ import pytest
 from pydantic import BaseModel, Field
 from rich.pretty import pprint
 
-from groundit import groundit, create_model_with_source
+from groundit import groundit, create_model_with_source, FieldWithSourceAndConfidence
 from tests.utils import validate_source_spans
 
 
@@ -127,3 +127,43 @@ class TestGrounditPipeline:
         patient_with_source = create_model_with_source(Patient)
         patient_with_source.model_validate(pydantic_result)
         patient_with_source.model_validate(schema_result)
+
+    @pytest.mark.parametrize("llm_model", ["anthropic/claude-sonnet-4-20250514"])
+    def test_verbalized_confidence_pydantic_model(
+        self, openai_client, test_document, llm_model
+    ):
+        """
+        Test the verbalized confidence pipeline using Pydantic models.
+
+        This test verifies the verbalized confidence path works and returns properly structured results.
+        """
+        # Use verbalized confidence
+        final_result = groundit(
+            document=test_document,
+            extraction_model=Patient,
+            llm_model=llm_model,
+            verbalized_confidence=True,
+        )
+
+        print("\n=== VERBALIZED CONFIDENCE RESULT ===")
+        pprint(final_result, expand_all=True)
+
+        # Each field should have the verbalized confidence structure
+        for field_value in final_result.values():
+            assert "value" in field_value
+            assert "source_quote" in field_value
+            assert "value_verbalized_confidence" in field_value
+            assert "source_quote_verbalized_confidence" in field_value
+
+            # Confidence values should be in valid range
+            assert 0.0 <= field_value["value_verbalized_confidence"] <= 1.0
+            assert 0.0 <= field_value["source_quote_verbalized_confidence"] <= 1.0
+
+        # Should be able to validate with FieldWithSourceAndConfidence model (used when verbalized confidence is True)
+        patient_with_src_and_confidence = create_model_with_source(
+            model=Patient, enrichment_class=FieldWithSourceAndConfidence
+        )
+        validated_instance = patient_with_src_and_confidence.model_validate(
+            final_result
+        )
+        assert validated_instance is not None
