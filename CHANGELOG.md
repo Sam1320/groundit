@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Verbalized Confidence Support**: Support for models that don't provide logprobs (like Claude/Anthropic models)
+  - `FieldWithSourceAndConfidence` model with `value_verbalized_confidence` and `source_quote_verbalized_confidence` fields
+  - `verbalized_confidence` parameter to `groundit()` function (defaults to `False` for backward compatibility)
+  - `DEFAULT_VERBALIZED_CONFIDENCE_PROMPT` for requesting confidence scores directly from models
+  - Integration tests for verbalized confidence path with Claude Sonnet
+
+### Changed
+- `create_model_with_source()` and `create_json_schema_with_source()` now accept `enrichment_class` parameter to support different field enrichment types
+- `groundit()` function conditionally handles logprobs parameter to support models that don't accept it
+
 ## [0.1.4] - 2025-06-29
 
 ### Added
