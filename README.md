@@ -141,11 +141,71 @@ result = groundit(
 print(result)
 ```
 
+### Verbalized Confidence (for models without logprobs)
+
+For models that don't provide token probabilities (like Claude/Anthropic models), you can use verbalized confidence:
+
+```python
+import os
+from groundit import groundit
+from pydantic import BaseModel, Field
+
+# Set your Anthropic API key
+os.environ["ANTHROPIC_API_KEY"] = "sk-ant-..."
+
+class Patient(BaseModel):
+    first_name: str = Field(description="Given name")
+    last_name: str = Field(description="Family name")
+    age: int = Field(description="Age in years")
+
+document = "Patient John Smith, 45 years old, diagnosed with diabetes"
+
+# Use verbalized confidence with Claude
+result = groundit(
+    document=document,
+    extraction_model=Patient,
+    llm_model="anthropic/claude-sonnet-4-20250514",
+    verbalized_confidence=True  # Enable verbalized confidence
+)
+
+print(result)
+```
+
+**Output with verbalized confidence:**
+```python
+{
+    'first_name': {
+        'value': 'John',
+        'source_quote': 'Patient John Smith',
+        'value_verbalized_confidence': 0.95,
+        'source_quote_verbalized_confidence': 0.98,
+        'source_span': [8, 23]
+    },
+    'last_name': {
+        'value': 'Smith',
+        'source_quote': 'John Smith',
+        'value_verbalized_confidence': 0.92,
+        'source_quote_verbalized_confidence': 0.94,
+        'source_span': [13, 23]
+    },
+    'age': {
+        'value': 45,
+        'source_quote': '45 years old',
+        'value_verbalized_confidence': 0.90,
+        'source_quote_verbalized_confidence': 0.96,
+        'source_span': [25, 37]
+    }
+}
+```
+
 ## Requirements
 
 - Python 3.12+
-- OpenAI API key
-- `OPENAI_API_KEY` environment variable
+- API key for your chosen LLM provider:
+  - `OPENAI_API_KEY` for OpenAI models
+  - `ANTHROPIC_API_KEY` for Anthropic/Claude models
+  - `HUGGINGFACE_API_KEY` for Hugging Face models
+  - `GEMINI_API_KEY` for Google Gemini models
 
 ## Standalone Confidence Scoring
 

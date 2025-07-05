@@ -3,15 +3,11 @@ from typing import Any, Type, Optional
 from pydantic import BaseModel
 from litellm import LiteLLM
 
-from groundit.confidence.confidence_extractor import (
-    add_confidence_scores,
-    get_confidence_scores,
-)
+from groundit.confidence.confidence_extractor import add_confidence_scores
 from groundit.confidence.logprobs_aggregators import (
     AggregationFunction,
     average_probability_aggregator,
     joint_probability_aggregator,
-    default_sum_aggregator,
 )
 from groundit.reference.add_source_spans import add_source_spans
 from groundit.reference.create_model_with_source import (
@@ -25,6 +21,60 @@ from groundit.config import (
     DEFAULT_LLM_MODEL,
     DEFAULT_PROBABILITY_AGGREGATOR,
 )
+
+
+def _build_request_params(
+    llm_model: str,
+    extraction_prompt: str,
+    document: str,
+    response_format: Any,
+    verbalized_confidence: bool,
+) -> dict[str, Any]:
+    """Build request parameters for LLM API call."""
+    params = {
+        "model": llm_model,
+        "messages": [
+            {"role": "system", "content": extraction_prompt},
+            {"role": "user", "content": document},
+        ],
+        "response_format": response_format,
+    }
+
+    # Only add logprobs for non-verbalized confidence
+    if not verbalized_confidence:
+        params["logprobs"] = True
+
+    return params
+
+
+def _process_llm_response(
+    response: Any,
+    document: str,
+    llm_model: str,
+    probability_aggregator: AggregationFunction,
+    verbalized_confidence: bool,
+) -> dict[str, Any]:
+    """Process LLM response and add confidence scores and source spans."""
+    # Parse the response
+    content = response.choices[0].message.content
+    extraction_result = json.loads(content)
+
+    if verbalized_confidence:
+        # For verbalized confidence, skip logprob-based confidence scoring
+        result_with_confidence = extraction_result
+    else:
+        # Add confidence scores from logprobs
+        tokens = response.choices[0].logprobs.content
+        result_with_confidence = add_confidence_scores(
+            extraction_result=extraction_result,
+            tokens=tokens,
+            model_name=llm_model,
+            aggregator=probability_aggregator,
+        )
+
+    # Add source spans
+    final_result = add_source_spans(result_with_confidence, document)
+    return final_result
 
 
 def groundit(
@@ -81,19 +131,13 @@ def groundit(
         # Use Pydantic model approach
         model_with_source = create_model_with_source(extraction_model, enrichment_class)
 
-        # Build request parameters conditionally
-        request_params = {
-            "model": llm_model,
-            "messages": [
-                {"role": "system", "content": extraction_prompt},
-                {"role": "user", "content": document},
-            ],
-            "response_format": model_with_source,
-        }
-
-        # Only add logprobs for non-verbalized confidence
-        if not verbalized_confidence:
-            request_params["logprobs"] = True
+        request_params = _build_request_params(
+            llm_model=llm_model,
+            extraction_prompt=extraction_prompt,
+            document=document,
+            response_format=model_with_source,
+            verbalized_confidence=verbalized_confidence,
+        )
 
         response = litellm_client.chat.completions.create(**request_params)  # type: ignore
     elif extraction_schema is not None:
@@ -102,68 +146,40 @@ def groundit(
             extraction_schema, enrichment_class
         )
 
-        # Build request parameters conditionally
-        request_params = {
-            "model": llm_model,
-            "messages": [
-                {"role": "system", "content": extraction_prompt},
-                {"role": "user", "content": document},
-            ],
-            "response_format": {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "extraction_result",
-                    "schema": transformed_schema,
-                },
+        response_format = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "extraction_result",
+                "schema": transformed_schema,
             },
         }
 
-        # Only add logprobs for non-verbalized confidence
-        if not verbalized_confidence:
-            request_params["logprobs"] = True
+        request_params = _build_request_params(
+            llm_model=llm_model,
+            extraction_prompt=extraction_prompt,
+            document=document,
+            response_format=response_format,
+            verbalized_confidence=verbalized_confidence,
+        )
 
         response = litellm_client.chat.completions.create(**request_params)  # type: ignore
     else:
         raise ValueError("Must provide either extraction_model or extraction_schema.")
 
-    # Parse the response
-    content = response.choices[0].message.content
-    extraction_result = json.loads(content)
-
-    if verbalized_confidence:
-        # For verbalized confidence, skip logprob-based confidence scoring
-        result_with_confidence = extraction_result
-    else:
-        # Add confidence scores from logprobs
-        tokens = response.choices[0].logprobs.content
-        result_with_confidence = add_confidence_scores(
-            extraction_result=extraction_result,
-            tokens=tokens,
-            model_name=llm_model,
-            aggregator=probability_aggregator,
-        )
-
-    # Add source spans
-    final_result = add_source_spans(result_with_confidence, document)
-
-    return final_result
+    return _process_llm_response(
+        response=response,
+        document=document,
+        llm_model=llm_model,
+        probability_aggregator=probability_aggregator,
+        verbalized_confidence=verbalized_confidence,
+    )
 
 
 __all__ = [
     "groundit",
-    "get_confidence_scores",
-    "add_confidence_scores",
-    "add_source_spans",
     "create_model_with_source",
-    "create_json_schema_with_source",
-    "FieldWithSource",
+    "add_confidence_scores",
     "FieldWithSourceAndConfidence",
-    "AggregationFunction",
     "average_probability_aggregator",
     "joint_probability_aggregator",
-    "default_sum_aggregator",
-    "DEFAULT_EXTRACTION_PROMPT",
-    "DEFAULT_VERBALIZED_CONFIDENCE_PROMPT",
-    "DEFAULT_LLM_MODEL",
-    "DEFAULT_PROBABILITY_AGGREGATOR",
 ]
