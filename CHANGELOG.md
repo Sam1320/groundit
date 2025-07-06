@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6] - 2025-01-07
+
+### Added
+- **Automatic model detection**: `groundit()` now automatically detects models that don't support logprobs and enables verbalized confidence mode with a user warning
+
+### Changed
+- **Unified confidence field names**: Both logprob and verbalized confidence now use consistent field names (`value_confidence` and `source_quote_confidence`) for simplified frontend integration
+
+## [0.1.5] - 2025-01-07
+
 ### Added
 - **Verbalized Confidence Support**: Support for models that don't provide logprobs (like Claude/Anthropic models)
   - `FieldWithSourceAndConfidence` model with `value_verbalized_confidence` and `source_quote_verbalized_confidence` fields

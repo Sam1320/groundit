@@ -161,12 +161,12 @@ class TestGrounditPipeline:
         for field_value in final_result.values():
             assert "value" in field_value
             assert "source_quote" in field_value
-            assert "value_verbalized_confidence" in field_value
-            assert "source_quote_verbalized_confidence" in field_value
+            assert "value_confidence" in field_value
+            assert "source_quote_confidence" in field_value
 
             # Confidence values should be in valid range
-            assert 0.0 <= field_value["value_verbalized_confidence"] <= 1.0
-            assert 0.0 <= field_value["source_quote_verbalized_confidence"] <= 1.0
+            assert 0.0 <= field_value["value_confidence"] <= 1.0
+            assert 0.0 <= field_value["source_quote_confidence"] <= 1.0
 
         # Should be able to validate with FieldWithSourceAndConfidence model (used when verbalized confidence is True)
         patient_with_src_and_confidence = create_model_with_source(
@@ -201,12 +201,12 @@ class TestGrounditPipeline:
         for field_value in final_result.values():
             assert "value" in field_value
             assert "source_quote" in field_value
-            assert "value_verbalized_confidence" in field_value
-            assert "source_quote_verbalized_confidence" in field_value
+            assert "value_confidence" in field_value
+            assert "source_quote_confidence" in field_value
 
             # Confidence values should be in valid range
-            assert 0.0 <= field_value["value_verbalized_confidence"] <= 1.0
-            assert 0.0 <= field_value["source_quote_verbalized_confidence"] <= 1.0
+            assert 0.0 <= field_value["value_confidence"] <= 1.0
+            assert 0.0 <= field_value["source_quote_confidence"] <= 1.0
 
         # Should be able to validate with FieldWithSourceAndConfidence model
         patient_with_src_and_confidence = create_model_with_source(

@@ -135,7 +135,7 @@ doc = "John Doe, 1990-01-01, male"
 result = groundit(
     document=doc,
     extraction_model=Patient,
-    llm_model="huggingface/mistralai/Mistral-Small-3.1-24B-Instruct-2503",
+    llm_model="huggingface/nebius/mistralai/Mistral-Small-3.1-24B-Instruct-2503",
 )
 
 print(result)
@@ -177,22 +177,22 @@ print(result)
     'first_name': {
         'value': 'John',
         'source_quote': 'Patient John Smith',
-        'value_verbalized_confidence': 0.95,
-        'source_quote_verbalized_confidence': 0.98,
+        'value_confidence': 0.95,
+        'source_quote_confidence': 0.98,
         'source_span': [8, 23]
     },
     'last_name': {
         'value': 'Smith',
         'source_quote': 'John Smith',
-        'value_verbalized_confidence': 0.92,
-        'source_quote_verbalized_confidence': 0.94,
+        'value_confidence': 0.92,
+        'source_quote_confidence': 0.94,
         'source_span': [13, 23]
     },
     'age': {
         'value': 45,
         'source_quote': '45 years old',
-        'value_verbalized_confidence': 0.90,
-        'source_quote_verbalized_confidence': 0.96,
+        'value_confidence': 0.90,
+        'source_quote_confidence': 0.96,
         'source_span': [25, 37]
     }
 }

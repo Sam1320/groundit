@@ -30,12 +30,12 @@ class FieldWithSourceAndConfidence(FieldWithSource[T]):
     scores for both the extracted value and source quote, rated on a scale from 0 to 1.
     """
 
-    value_verbalized_confidence: float = Field(
+    value_confidence: float = Field(
         description="Verbalized confidence score for the extracted value, ranging from 0 to 1.",
         ge=0.0,
         le=1.0,
     )
-    source_quote_verbalized_confidence: float = Field(
+    source_quote_confidence: float = Field(
         description="Verbalized confidence score for the source quote, ranging from 0 to 1.",
         ge=0.0,
         le=1.0,
