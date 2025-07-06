@@ -1,4 +1,5 @@
 import json
+import warnings
 from typing import Any, Type, Optional
 from pydantic import BaseModel
 from litellm import LiteLLM
@@ -21,6 +22,38 @@ from groundit.config import (
     DEFAULT_LLM_MODEL,
     DEFAULT_PROBABILITY_AGGREGATOR,
 )
+
+
+def _supports_logprobs(model_name: str) -> bool:
+    """
+    Determine if a model supports logprobs based on its name.
+
+    Args:
+        model_name: The model name/identifier
+
+    Returns:
+        True if the model supports logprobs, False otherwise
+    """
+    model_lower = model_name.lower()
+
+    # Models that support logprobs
+    logprob_models = ["gpt", "mistral"]
+
+    # Models that don't support logprobs
+    non_logprob_models = ["claude"]
+
+    # Check for non-logprob models first
+    for model in non_logprob_models:
+        if model in model_lower:
+            return False
+
+    # Check for logprob-supporting models
+    for model in logprob_models:
+        if model in model_lower:
+            return True
+
+    # Default to True for unknown models
+    return True
 
 
 def _build_request_params(
@@ -114,6 +147,16 @@ def groundit(
     """
     if litellm_client is None:
         litellm_client = LiteLLM()
+
+    # Auto-enable verbalized confidence for models that don't support logprobs
+    if not verbalized_confidence and not _supports_logprobs(llm_model):
+        verbalized_confidence = True
+        warnings.warn(
+            f"Model '{llm_model}' does not support logprobs. "
+            "Automatically enabling verbalized confidence mode.",
+            UserWarning,
+            stacklevel=2,
+        )
 
     if extraction_prompt is None:
         extraction_prompt = (
